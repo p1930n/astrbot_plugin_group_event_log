@@ -1,21 +1,29 @@
 import json
+import shutil
 import unittest
 from pathlib import Path
 
-from persistence import ConfigPersistence
+from persistence import ConfigPersistence, PLUGIN_DATA_DIR_NAME
+from sqlite_repository import SQLiteStateRepository
 
 
 class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self) -> None:
-        self.plugin_dir = Path(__file__).parent / "test_workspace"
+        self.workspace_root = Path(__file__).parent / "test_workspace"
+        self.plugin_dir = self.workspace_root / "plugin_source"
+        self.runtime_root = self.workspace_root / "runtime_root"
+        self.legacy_data_dir = self.plugin_dir / "data"
+        self.runtime_data_dir = self.runtime_root / "data" / PLUGIN_DATA_DIR_NAME
         self._reset_workspace()
+        self.plugin_dir.mkdir(parents=True, exist_ok=True)
+        self.runtime_root.mkdir(parents=True, exist_ok=True)
 
     async def asyncTearDown(self) -> None:
         self._reset_workspace()
 
-    async def test_legacy_json_state_is_migrated_into_sqlite(self) -> None:
+    async def test_legacy_json_state_is_migrated_into_runtime_sqlite(self) -> None:
         self._write_json(
-            "data/config.json",
+            "config.json",
             {
                 "plugin_enabled": True,
                 "debug_raw_notice": False,
@@ -45,7 +53,7 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         self._write_json(
-            "data/avatar_hash/10001.json",
+            "avatar_hash/10001.json",
             {
                 "group_id": "10001",
                 "baseline_hash": "abc",
@@ -53,14 +61,14 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
             },
         )
         self._write_json(
-            "data/group_name_guard/10001.json",
+            "group_name_guard/10001.json",
             {
                 "group_id": "10001",
                 "baseline_name": "group-name",
             },
         )
         self._write_json(
-            "data/member_profile/10001.json",
+            "member_profile/10001.json",
             {
                 "group_id": "10001",
                 "members": {
@@ -73,16 +81,24 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
                 },
             },
         )
-        runtime_owner_path = self.plugin_dir / "data" / "runtime_owner.txt"
+        self._write_json(
+            "avatar_probe/10001.json",
+            {
+                "group_id": "10001",
+                "saved_at": "2026-04-09T12:03:00",
+            },
+        )
+        runtime_owner_path = self.legacy_data_dir / "runtime_owner.txt"
         runtime_owner_path.parent.mkdir(parents=True, exist_ok=True)
         runtime_owner_path.write_text("runtime-token", encoding="utf-8")
 
-        persistence = ConfigPersistence(self.plugin_dir)
+        persistence = ConfigPersistence(self.plugin_dir, self.runtime_root)
 
         config = await persistence.load_config()
         avatar_state = await persistence.load_avatar_hash_state("10001")
         group_name_state = await persistence.load_group_name_guard("10001")
         member_state = await persistence.load_member_profile_state("10001")
+        probe_record = await persistence.load_avatar_probe("10001")
         runtime_owner = await persistence.load_runtime_owner()
 
         self.assertTrue(config["plugin_enabled"])
@@ -96,11 +112,21 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
             member_state["members"]["30001"]["nickname"],
             "tester",
         )
+        self.assertEqual(probe_record["group_id"], "10001")
         self.assertEqual(runtime_owner, "runtime-token")
+        self.assertEqual(
+            Path(persistence.database_path),
+            self.runtime_data_dir / "state.sqlite3",
+        )
         self.assertTrue(Path(persistence.database_path).exists())
+        self.assertEqual(
+            Path(persistence.avatar_probe_path("10001")),
+            self.runtime_data_dir / "avatar_probe" / "10001.json",
+        )
+        self.assertTrue(Path(persistence.avatar_probe_path("10001")).exists())
 
     async def test_sqlite_round_trip_works_without_legacy_files(self) -> None:
-        persistence = ConfigPersistence(self.plugin_dir)
+        persistence = ConfigPersistence(self.plugin_dir, self.runtime_root)
 
         await persistence.save_config({"plugin_enabled": False})
         await persistence.save_avatar_hash_state(
@@ -126,6 +152,11 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
         )
         await persistence.save_runtime_owner("active-runtime")
 
+        probe_path = await persistence.save_avatar_probe(
+            "10001",
+            {"group_id": "10001", "saved_at": "2026-04-09T12:10:00"},
+        )
+
         self.assertEqual(
             await persistence.load_config(),
             {"plugin_enabled": False},
@@ -143,23 +174,57 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
             "10001",
         )
         self.assertEqual(await persistence.load_runtime_owner(), "active-runtime")
+        self.assertEqual(
+            Path(probe_path),
+            self.runtime_data_dir / "avatar_probe" / "10001.json",
+        )
+        self.assertEqual(
+            Path(persistence.database_path),
+            self.runtime_data_dir / "state.sqlite3",
+        )
+
+    async def test_legacy_sqlite_store_is_copied_and_baseline_paths_are_rewritten(self) -> None:
+        legacy_repository = SQLiteStateRepository(self.legacy_data_dir)
+        legacy_baseline_path = self.legacy_data_dir / "avatar_baseline" / "10001" / "baseline.png"
+        legacy_baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        legacy_baseline_path.write_bytes(b"baseline")
+
+        legacy_repository.save_config({"plugin_enabled": False})
+        legacy_repository.save_avatar_hash_state(
+            "10001",
+            {
+                "group_id": "10001",
+                "baseline_hash": "legacy-hash",
+                "baseline_image_path": str(legacy_baseline_path),
+            },
+        )
+        legacy_repository.save_runtime_owner("legacy-runtime")
+
+        persistence = ConfigPersistence(self.plugin_dir, self.runtime_root)
+
+        self.assertEqual(await persistence.load_config(), {"plugin_enabled": False})
+        self.assertEqual(await persistence.load_runtime_owner(), "legacy-runtime")
+        self.assertEqual(
+            (await persistence.load_avatar_hash_state("10001"))["baseline_hash"],
+            "legacy-hash",
+        )
+        self.assertEqual(
+            (await persistence.load_avatar_hash_state("10001"))["baseline_image_path"],
+            str(self.runtime_data_dir / "avatar_baseline" / "10001" / "baseline.png"),
+        )
+        self.assertTrue((self.runtime_data_dir / "state.sqlite3").exists())
+        self.assertTrue(
+            (self.runtime_data_dir / "avatar_baseline" / "10001" / "baseline.png").exists()
+        )
 
     def _write_json(self, relative_path: str, payload: dict[str, object]) -> None:
-        file_path = self.plugin_dir / relative_path
+        file_path = self.legacy_data_dir / relative_path
+        file_path.parent.mkdir(parents=True, exist_ok=True)
         file_path.write_text(
             json.dumps(payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
 
     def _reset_workspace(self) -> None:
-        self._clear_directory(self.plugin_dir / "data")
-        self._clear_directory(self.plugin_dir / "data" / "avatar_hash")
-        self._clear_directory(self.plugin_dir / "data" / "group_name_guard")
-        self._clear_directory(self.plugin_dir / "data" / "member_profile")
-
-    def _clear_directory(self, directory_path: Path) -> None:
-        for file_path in directory_path.iterdir():
-            if file_path.name == ".gitkeep":
-                continue
-            if file_path.is_file():
-                file_path.unlink()
+        if self.workspace_root.exists():
+            shutil.rmtree(self.workspace_root)

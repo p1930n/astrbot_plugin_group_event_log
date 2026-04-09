@@ -53,8 +53,10 @@ from .persistence import ConfigPersistence
 class GroupEventLogPlugin(star.Star):
     def __init__(self, context: star.Context) -> None:
         super().__init__(context)
-        self._plugin_dir = Path(__file__).parent
-        self._persistence = ConfigPersistence(self._plugin_dir)
+        self._persistence = ConfigPersistence(
+            plugin_dir=Path(__file__).parent,
+            runtime_root=Path.cwd(),
+        )
         self._permissions = PermissionService(context)
         self._group_context_service = GroupContextService(self._permissions)
         self._bot_api = BotApiService(self._permissions)
@@ -306,9 +308,7 @@ class GroupEventLogPlugin(star.Star):
             if lines:
                 lines.append("----")
             lines.extend(summarize_avatar_probe(record))
-            lines.append(
-                f"probe_snapshot_path: {self._plugin_dir / 'data' / 'avatar_probe' / f'{group_id}.json'}"
-            )
+            lines.append(f"probe_snapshot_path: {self._persistence.avatar_probe_path(group_id)}")
         return MessageEventResult().message("\n".join(lines))
 
     async def _cmd_member_check(self, group_id: str) -> MessageEventResult:

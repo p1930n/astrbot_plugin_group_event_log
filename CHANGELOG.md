@@ -5,6 +5,8 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 ## [Unreleased]
 ### Changed
 - **Optimization Roadmap**: Consolidated the latest architecture conclusions into `TODO.md`, defining Phase 11 around state-path stability, native async SQLite migration, avatar rollback diagnostics, Bot API anti-corruption hardening, and deferring internal Event Bus work.
+- **AstrBot Compliance Roadmap**: Updated Phase 11 in `TODO.md` to prioritize AstrBot root data-directory migration, callback removal from service orchestration, and hot-reload task lifecycle guarantees before deeper persistence and adapter refactors.
+- **Runtime Data Root**: Moved plugin runtime state to AstrBot root `data/astrbot_plugin_group_event_log`, added compatibility migration for legacy plugin-local SQLite / probe / baseline files, and updated status output paths to point at the new runtime store.
 
 ### Refactored
 - **State Persistence**: Migrated high-frequency runtime state (avatar hash, group name guard, member profiles) from scattered JSON writes to SQLite.

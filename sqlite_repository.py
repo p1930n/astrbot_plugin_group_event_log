@@ -21,9 +21,14 @@ DEFAULT_RUNTIME_OWNER_KEY = "active"
 
 
 class SQLiteStateRepository:
-    def __init__(self, data_dir: Path) -> None:
+    def __init__(
+        self,
+        data_dir: Path,
+        legacy_data_dirs: tuple[Path, ...] = (),
+    ) -> None:
         self._data_dir = data_dir
         self._database_path = self._data_dir / "state.sqlite3"
+        self._migration_source_dirs = self._build_migration_source_dirs(legacy_data_dirs)
         self._init_lock = threading.Lock()
         self._initialized = False
 
@@ -115,6 +120,15 @@ class SQLiteStateRepository:
                 self._migrate_legacy_files(connection)
             self._initialized = True
 
+    def _build_migration_source_dirs(self, legacy_data_dirs: tuple[Path, ...]) -> tuple[Path, ...]:
+        source_dirs: list[Path] = [self._data_dir]
+        for directory_path in legacy_data_dirs:
+            resolved_path = directory_path.resolve()
+            if any(existing.resolve() == resolved_path for existing in source_dirs):
+                continue
+            source_dirs.append(directory_path)
+        return tuple(source_dirs)
+
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
         connection = sqlite3.connect(self._database_path, timeout=30.0)
@@ -170,37 +184,42 @@ class SQLiteStateRepository:
         if migration_state == LEGACY_MIGRATION_DONE_VALUE:
             return
 
-        self._migrate_named_json_file(
-            connection,
-            self._data_dir / "config.json",
-            "plugin_config",
-            "config_key",
-            DEFAULT_CONFIG_KEY,
-        )
-        self._migrate_group_state_directory(
-            connection,
-            self._data_dir / "avatar_hash",
-            "avatar_hash_states",
-        )
-        self._migrate_group_state_directory(
-            connection,
-            self._data_dir / "group_name_guard",
-            "group_name_guard_states",
-        )
-        self._migrate_group_state_directory(
-            connection,
-            self._data_dir / "member_profile",
-            "member_profile_states",
-        )
-        self._migrate_runtime_owner_file(connection, self._data_dir / "runtime_owner.txt")
+        for migration_source_dir in self._migration_source_dirs:
+            self._migrate_named_json_file(
+                connection,
+                migration_source_dir / "config.json",
+                "plugin_config",
+                "config_key",
+                DEFAULT_CONFIG_KEY,
+            )
+            self._migrate_group_state_directory(
+                connection,
+                migration_source_dir / "avatar_hash",
+                "avatar_hash_states",
+            )
+            self._migrate_group_state_directory(
+                connection,
+                migration_source_dir / "group_name_guard",
+                "group_name_guard_states",
+            )
+            self._migrate_group_state_directory(
+                connection,
+                migration_source_dir / "member_profile",
+                "member_profile_states",
+            )
+            self._migrate_runtime_owner_file(
+                connection,
+                migration_source_dir / "runtime_owner.txt",
+            )
         self._save_meta(
             connection,
             LEGACY_MIGRATION_META_KEY,
             LEGACY_MIGRATION_DONE_VALUE,
         )
         runtime_logger.info(
-            "[GroupEventLog] migrated legacy state files into sqlite store path=%s",
+            "[GroupEventLog] migrated legacy state files into sqlite store path=%s sources=%s",
             self._database_path,
+            ",".join(str(path) for path in self._migration_source_dirs),
         )
 
     def _migrate_named_json_file(
