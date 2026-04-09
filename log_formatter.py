@@ -80,6 +80,14 @@ def format_avatar_hash_log(
         lines.append(
             f"rollback_result: {'success' if transition.rollback_succeeded else 'failed'}"
         )
+    if transition.rollback_failure_reason:
+        lines.append(f"rollback_failure_reason: {transition.rollback_failure_reason}")
+    if transition.rollback_applied_input:
+        lines.append(f"rollback_applied_input: {transition.rollback_applied_input}")
+    if transition.rollback_attempted_inputs:
+        lines.append(
+            "rollback_attempted_inputs: " + ", ".join(transition.rollback_attempted_inputs)
+        )
     if transition.rollback_error:
         lines.append(f"rollback_error: {transition.rollback_error}")
 

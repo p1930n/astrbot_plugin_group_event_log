@@ -56,6 +56,9 @@ class AvatarHashTransition:
     baseline_image_path: str = ""
     error: str = ""
     rollback_error: str = ""
+    rollback_failure_reason: str = ""
+    rollback_applied_input: str = ""
+    rollback_attempted_inputs: tuple[str, ...] = ()
 
 
 async def fetch_group_avatar_hash(
@@ -197,6 +200,14 @@ def summarize_avatar_hash_transition(
         lines.append(
             f"rollback_result: {'success' if transition.rollback_succeeded else 'failed'}"
         )
+    if transition.rollback_failure_reason:
+        lines.append(f"rollback_failure_reason: {transition.rollback_failure_reason}")
+    if transition.rollback_applied_input:
+        lines.append(f"rollback_applied_input: {transition.rollback_applied_input}")
+    if transition.rollback_attempted_inputs:
+        lines.append(
+            "rollback_attempted_inputs: " + ", ".join(transition.rollback_attempted_inputs)
+        )
     if transition.rollback_error:
         lines.append(f"rollback_error: {transition.rollback_error}")
     if transition.error:
@@ -245,6 +256,15 @@ def summarize_avatar_hash_state(state: dict[str, Any]) -> list[str]:
         lines.append(f"last_rollback_at: {state['last_rollback_at']}")
     if state.get("last_rollback_result"):
         lines.append(f"last_rollback_result: {state['last_rollback_result']}")
+    if state.get("last_rollback_failure_reason"):
+        lines.append(
+            f"last_rollback_failure_reason: {state['last_rollback_failure_reason']}"
+        )
+    if state.get("last_rollback_applied_input"):
+        lines.append(f"last_rollback_applied_input: {state['last_rollback_applied_input']}")
+    attempted_inputs = state.get("last_rollback_attempted_inputs")
+    if isinstance(attempted_inputs, list) and attempted_inputs:
+        lines.append("last_rollback_attempted_inputs: " + ", ".join(attempted_inputs))
     if state.get("last_rollback_error"):
         lines.append(f"last_rollback_error: {state['last_rollback_error']}")
     if state.get("last_error"):

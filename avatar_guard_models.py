@@ -26,6 +26,25 @@ class AvatarRollbackResult(str, Enum):
         return self.value
 
 
+class AvatarRollbackFailureReason(str, Enum):
+    PATH_MISSING = "path_missing"
+    PATH_UNREADABLE = "path_unreadable"
+    API_REJECTED = "api_rejected"
+    VERIFY_FAILED = "verify_failed"
+
+    def __str__(self) -> str:
+        return self.value
+
+
+@dataclass(frozen=True, slots=True)
+class AvatarRollbackExecution:
+    success: bool
+    error: str = ""
+    failure_reason: AvatarRollbackFailureReason | None = None
+    applied_input: str = ""
+    attempted_inputs: tuple[str, ...] = ()
+
+
 @dataclass(frozen=True, slots=True)
 class AvatarVerifyRetryPolicy:
     delays_seconds: tuple[float, ...] = (2.0, 4.0, 8.0, 16.0)

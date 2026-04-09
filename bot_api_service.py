@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 try:
+    from .avatar_guard_models import AvatarRollbackExecution, AvatarRollbackFailureReason
     from astrbot.api import logger
     from astrbot.api.event import AstrMessageEvent
 except ImportError:
+    from avatar_guard_models import AvatarRollbackExecution, AvatarRollbackFailureReason
     logger = logging.getLogger(__name__)
     AstrMessageEvent = Any
 
@@ -142,18 +144,38 @@ class BotApiService:
 
     async def rollback_group_avatar(
         self, group_id: str, baseline_image_path: str
-    ) -> tuple[bool, str]:
-        if not baseline_image_path:
-            return False, "baseline image path missing"
+    ) -> AvatarRollbackExecution:
+        normalized_path = str(baseline_image_path).strip()
+        if not normalized_path:
+            return AvatarRollbackExecution(
+                success=False,
+                error="baseline image path missing",
+                failure_reason=AvatarRollbackFailureReason.PATH_MISSING,
+            )
+
+        candidates, path_error = self._build_group_portrait_candidates(normalized_path)
+        if path_error:
+            logger.error(
+                "[GroupEventLog] set_group_portrait skipped group=%s path=%s reason=%s",
+                group_id,
+                normalized_path,
+                path_error,
+            )
+            return AvatarRollbackExecution(
+                success=False,
+                error=path_error,
+                failure_reason=AvatarRollbackFailureReason.PATH_UNREADABLE,
+                attempted_inputs=tuple(candidates),
+            )
 
         bot = await self.get_bot()
         if not bot or not hasattr(bot, "api"):
-            return False, "no bot api available"
-
-        candidates = [baseline_image_path]
-        baseline_path = Path(baseline_image_path)
-        if baseline_path.is_absolute():
-            candidates.append(baseline_path.as_uri())
+            return AvatarRollbackExecution(
+                success=False,
+                error="no bot api available",
+                failure_reason=AvatarRollbackFailureReason.API_REJECTED,
+                attempted_inputs=tuple(candidates),
+            )
 
         last_error = "set_group_portrait failed"
         for file_value in candidates:
@@ -163,7 +185,53 @@ class BotApiService:
                     group_id=int(group_id),
                     file=file_value,
                 )
-                return True, ""
+                return AvatarRollbackExecution(
+                    success=True,
+                    applied_input=file_value,
+                    attempted_inputs=tuple(candidates),
+                )
             except Exception as exc:
                 last_error = str(exc)
-        return False, last_error
+        logger.error(
+            "[GroupEventLog] set_group_portrait failed group=%s attempted_inputs=%s err=%s",
+            group_id,
+            candidates,
+            last_error,
+        )
+        return AvatarRollbackExecution(
+            success=False,
+            error=last_error,
+            failure_reason=AvatarRollbackFailureReason.API_REJECTED,
+            attempted_inputs=tuple(candidates),
+        )
+
+    def _build_group_portrait_candidates(
+        self, baseline_image_path: str
+    ) -> tuple[list[str], str]:
+        candidates: list[str] = []
+        normalized_path = str(baseline_image_path).strip()
+        self._append_unique_candidate(candidates, normalized_path)
+
+        if not self._is_local_filesystem_path(normalized_path):
+            return candidates, ""
+
+        baseline_path = Path(normalized_path)
+        if not baseline_path.exists():
+            return candidates, f"baseline image path not found: {normalized_path}"
+        if not baseline_path.is_file():
+            return candidates, f"baseline image path is not a file: {normalized_path}"
+
+        self._append_unique_candidate(candidates, baseline_path.as_posix())
+        self._append_unique_candidate(candidates, baseline_path.as_uri())
+        return candidates, ""
+
+    def _is_local_filesystem_path(self, value: str) -> bool:
+        lowered = value.lower()
+        if lowered.startswith(("http://", "https://", "file://", "base64://", "data:")):
+            return False
+        return Path(value).is_absolute()
+
+    def _append_unique_candidate(self, candidates: list[str], value: str) -> None:
+        normalized = str(value).strip()
+        if normalized and normalized not in candidates:
+            candidates.append(normalized)

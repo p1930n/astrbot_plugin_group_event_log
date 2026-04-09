@@ -7,6 +7,7 @@ try:
     from .avatar_guard_models import (
         DEFAULT_AVATAR_VERIFY_RETRY_POLICY,
         AvatarHashStatus,
+        AvatarRollbackFailureReason,
         AvatarRollbackResult,
         AvatarVerifyRetryPolicy,
     )
@@ -20,6 +21,7 @@ except ImportError:
     from avatar_guard_models import (
         DEFAULT_AVATAR_VERIFY_RETRY_POLICY,
         AvatarHashStatus,
+        AvatarRollbackFailureReason,
         AvatarRollbackResult,
         AvatarVerifyRetryPolicy,
     )
@@ -100,17 +102,35 @@ class AvatarGuardService:
 
         if protect_baseline and transition.changed:
             transition.rollback_attempted = True
-            success, rollback_error = await self._bot_api.rollback_group_avatar(
+            rollback_execution = await self._bot_api.rollback_group_avatar(
                 group_id,
                 str(transition.state.get("baseline_image_path", "")).strip(),
             )
+            success = rollback_execution.success
+            rollback_error = rollback_execution.error
             transition.rollback_succeeded = success
             transition.rollback_error = rollback_error
+            transition.rollback_failure_reason = (
+                rollback_execution.failure_reason.value
+                if rollback_execution.failure_reason
+                else ""
+            )
+            transition.rollback_applied_input = rollback_execution.applied_input
+            transition.rollback_attempted_inputs = rollback_execution.attempted_inputs
             transition.state["last_rollback_at"] = transition.checked_at
             transition.state["last_rollback_result"] = (
                 AvatarRollbackResult.SUCCESS.value
                 if success
                 else AvatarRollbackResult.FAILED.value
+            )
+            transition.state["last_rollback_failure_reason"] = (
+                transition.rollback_failure_reason
+            )
+            transition.state["last_rollback_applied_input"] = (
+                transition.rollback_applied_input
+            )
+            transition.state["last_rollback_attempted_inputs"] = list(
+                transition.rollback_attempted_inputs
             )
             transition.state["last_rollback_error"] = rollback_error
             if success:
@@ -123,10 +143,21 @@ class AvatarGuardService:
                     transition.state["last_hash"] = verified_hash
                     transition.state["last_observed_hash"] = verified_hash
                     transition.state["last_error"] = ""
+                    transition.state["last_rollback_failure_reason"] = ""
+                    transition.state["last_rollback_error"] = ""
+                    transition.rollback_failure_reason = ""
+                    transition.rollback_error = ""
                     transition.status = AvatarHashStatus.ROLLBACK_SUCCESS
                 else:
                     transition.state["last_error"] = verify_error
                     transition.rollback_error = verify_error
+                    transition.rollback_failure_reason = (
+                        AvatarRollbackFailureReason.VERIFY_FAILED.value
+                    )
+                    transition.state["last_rollback_failure_reason"] = (
+                        transition.rollback_failure_reason
+                    )
+                    transition.state["last_rollback_error"] = verify_error
                     transition.status = AvatarHashStatus.ROLLBACK_SUCCESS_UNVERIFIED
             else:
                 transition.status = AvatarHashStatus.ROLLBACK_FAILED

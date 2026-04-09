@@ -1,6 +1,11 @@
 import unittest
 
-from avatar_guard_models import AvatarHashStatus, AvatarVerifyRetryPolicy
+from avatar_guard_models import (
+    AvatarHashStatus,
+    AvatarRollbackExecution,
+    AvatarRollbackFailureReason,
+    AvatarVerifyRetryPolicy,
+)
 from avatar_guard_service import AvatarGuardService
 from avatar_hash import AvatarHashFetchResult
 from models import SourceGroupConfig
@@ -26,17 +31,35 @@ class FakeAvatarPersistence:
 
 
 class FakeAvatarBotApi:
-    def __init__(self, rollback_ok: bool = True) -> None:
+    def __init__(
+        self,
+        rollback_ok: bool = True,
+        rollback_error: str = "rollback failed",
+        failure_reason: AvatarRollbackFailureReason | None = None,
+        applied_input: str = "",
+    ) -> None:
         self.rollback_ok = rollback_ok
+        self.rollback_error = rollback_error
+        self.failure_reason = failure_reason
+        self.applied_input = applied_input
         self.rollback_calls: list[tuple[str, str]] = []
 
     async def rollback_group_avatar(
         self, group_id: str, baseline_image_path: str
-    ) -> tuple[bool, str]:
+    ) -> AvatarRollbackExecution:
         self.rollback_calls.append((group_id, baseline_image_path))
         if self.rollback_ok:
-            return True, ""
-        return False, "rollback failed"
+            return AvatarRollbackExecution(
+                success=True,
+                applied_input=self.applied_input or baseline_image_path,
+                attempted_inputs=(baseline_image_path,),
+            )
+        return AvatarRollbackExecution(
+            success=False,
+            error=self.rollback_error,
+            failure_reason=self.failure_reason,
+            attempted_inputs=(baseline_image_path,),
+        )
 
 
 class FakeAvatarLogDispatcher:
@@ -185,6 +208,7 @@ class AvatarGuardServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(dispatcher.calls), 1)
         self.assertEqual(dispatcher.calls[0]["push_group_ids"], ["20001"])
+        self.assertEqual(transition.rollback_applied_input, "memory://avatar_baseline/10001/baseline.png")
 
     async def test_check_group_avatar_uses_retry_policy_delays(self) -> None:
         persistence = FakeAvatarPersistence()
@@ -264,3 +288,120 @@ class AvatarGuardServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(sleep_calls, [1.0, 2.0, 4.0])
         self.assertEqual(transition.status, AvatarHashStatus.ROLLBACK_SUCCESS)
+
+    async def test_check_group_avatar_marks_verify_failed_reason(self) -> None:
+        persistence = FakeAvatarPersistence()
+        persistence.avatar_states["10001"] = {
+            "group_id": "10001",
+            "baseline_hash": "hash-old",
+            "last_hash": "hash-old",
+            "baseline_image_path": "memory://avatar_baseline/10001/baseline.png",
+            "first_baseline_at": "2026-04-09T20:00:00",
+            "change_count": 0,
+        }
+        bot_api = FakeAvatarBotApi(rollback_ok=True)
+        dispatcher = FakeAvatarLogDispatcher()
+        fetcher = SequentialAvatarFetcher(
+            [
+                AvatarHashFetchResult(
+                    ok=True,
+                    group_id="10001",
+                    checked_at="2026-04-09T20:21:00",
+                    hash_value="hash-new",
+                    source_url="https://example/avatar-new",
+                    byte_size=3,
+                    content_type="image/png",
+                    file_suffix=".png",
+                    image_bytes=b"new",
+                ),
+                AvatarHashFetchResult(
+                    ok=False,
+                    group_id="10001",
+                    checked_at="2026-04-09T20:21:02",
+                    error="avatar verify after rollback failed",
+                ),
+            ]
+        )
+        service = AvatarGuardService(
+            persistence,
+            bot_api,
+            dispatcher,
+            fetch_avatar_hash=fetcher,
+            sleep_func=_noop_sleep,
+            retry_policy=AvatarVerifyRetryPolicy(delays_seconds=(1.0,)),
+        )
+
+        transition, _ = await service.check_group_avatar(
+            "10001",
+            SourceGroupConfig(enabled=True, avatar_rollback_enabled=True),
+            ["20001"],
+            "poll",
+            True,
+        )
+
+        self.assertEqual(transition.status, AvatarHashStatus.ROLLBACK_SUCCESS_UNVERIFIED)
+        self.assertEqual(
+            transition.rollback_failure_reason,
+            AvatarRollbackFailureReason.VERIFY_FAILED.value,
+        )
+        self.assertEqual(
+            persistence.avatar_states["10001"]["last_rollback_failure_reason"],
+            AvatarRollbackFailureReason.VERIFY_FAILED.value,
+        )
+
+    async def test_check_group_avatar_records_api_rejected_reason(self) -> None:
+        persistence = FakeAvatarPersistence()
+        persistence.avatar_states["10001"] = {
+            "group_id": "10001",
+            "baseline_hash": "hash-old",
+            "last_hash": "hash-old",
+            "baseline_image_path": "memory://avatar_baseline/10001/baseline.png",
+            "first_baseline_at": "2026-04-09T20:00:00",
+            "change_count": 0,
+        }
+        bot_api = FakeAvatarBotApi(
+            rollback_ok=False,
+            rollback_error="set_group_portrait rejected",
+            failure_reason=AvatarRollbackFailureReason.API_REJECTED,
+        )
+        dispatcher = FakeAvatarLogDispatcher()
+        fetcher = SequentialAvatarFetcher(
+            [
+                AvatarHashFetchResult(
+                    ok=True,
+                    group_id="10001",
+                    checked_at="2026-04-09T20:21:00",
+                    hash_value="hash-new",
+                    source_url="https://example/avatar-new",
+                    byte_size=3,
+                    content_type="image/png",
+                    file_suffix=".png",
+                    image_bytes=b"new",
+                )
+            ]
+        )
+        service = AvatarGuardService(
+            persistence,
+            bot_api,
+            dispatcher,
+            fetch_avatar_hash=fetcher,
+            sleep_func=_noop_sleep,
+        )
+
+        transition, _ = await service.check_group_avatar(
+            "10001",
+            SourceGroupConfig(enabled=True, avatar_rollback_enabled=True),
+            ["20001"],
+            "poll",
+            True,
+        )
+
+        self.assertEqual(transition.status, AvatarHashStatus.ROLLBACK_FAILED)
+        self.assertEqual(
+            transition.rollback_failure_reason,
+            AvatarRollbackFailureReason.API_REJECTED.value,
+        )
+        self.assertEqual(
+            persistence.avatar_states["10001"]["last_rollback_failure_reason"],
+            AvatarRollbackFailureReason.API_REJECTED.value,
+        )
