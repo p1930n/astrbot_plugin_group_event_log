@@ -12,10 +12,14 @@ except ImportError:
 if TYPE_CHECKING:
     try:
         from .bot_api_service import BotApiService
-        from .models import PluginConfig
+        from .group_runtime_service import GroupRuntimeService
+        from .plugin_runtime_state import PluginRuntimeState
+        from .runtime_session_service import RuntimeSessionService
     except ImportError:
         from bot_api_service import BotApiService
-        from models import PluginConfig
+        from group_runtime_service import GroupRuntimeService
+        from plugin_runtime_state import PluginRuntimeState
+        from runtime_session_service import RuntimeSessionService
 
 
 BOT_READY_RETRY_SECONDS = 5
@@ -29,31 +33,25 @@ class PollingSchedulerService:
     def __init__(
         self,
         bot_api: "BotApiService",
-        is_active_runtime: Callable[[], Awaitable[bool]],
-        is_plugin_ready: Callable[[], bool],
-        is_running: Callable[[], bool],
-        get_config: Callable[[], "PluginConfig"],
-        run_avatar_check: Callable[[str], Awaitable[None]],
-        run_member_profile_check: Callable[[str], Awaitable[None]],
+        runtime_state: "PluginRuntimeState",
+        runtime_session_service: "RuntimeSessionService",
+        group_runtime_service: "GroupRuntimeService",
         sleep_func: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self._bot_api = bot_api
-        self._is_active_runtime = is_active_runtime
-        self._is_plugin_ready = is_plugin_ready
-        self._is_running = is_running
-        self._get_config = get_config
-        self._run_avatar_check = run_avatar_check
-        self._run_member_profile_check = run_member_profile_check
+        self._runtime_state = runtime_state
+        self._runtime_session_service = runtime_session_service
+        self._group_runtime_service = group_runtime_service
         self._sleep = sleep_func
 
     async def avatar_poll_loop(self) -> None:
-        while self._is_running():
+        while self._runtime_state.is_running:
             try:
-                if not await self._is_active_runtime():
+                if not await self._runtime_session_service.is_active_runtime():
                     break
 
-                config = self._get_config()
-                if not self._is_plugin_ready() or not config.plugin_enabled:
+                config = self._runtime_state.config
+                if not self._runtime_state.is_ready or not config.plugin_enabled:
                     await self._sleep(DISABLED_RETRY_SECONDS)
                     continue
 
@@ -75,7 +73,7 @@ class PollingSchedulerService:
                     continue
 
                 for group_id in monitored_group_ids:
-                    await self._run_avatar_check(group_id)
+                    await self._group_runtime_service.run_avatar_poll_check(group_id)
                     await self._sleep(GROUP_CHECK_SPACING_SECONDS)
 
                 await self._sleep(config.avatar_poll_interval_seconds)
@@ -86,13 +84,13 @@ class PollingSchedulerService:
                 await self._sleep(LOOP_ERROR_RETRY_SECONDS)
 
     async def member_profile_poll_loop(self) -> None:
-        while self._is_running():
+        while self._runtime_state.is_running:
             try:
-                if not await self._is_active_runtime():
+                if not await self._runtime_session_service.is_active_runtime():
                     break
 
-                config = self._get_config()
-                if not self._is_plugin_ready() or not config.plugin_enabled:
+                config = self._runtime_state.config
+                if not self._runtime_state.is_ready or not config.plugin_enabled:
                     await self._sleep(DISABLED_RETRY_SECONDS)
                     continue
 
@@ -116,7 +114,7 @@ class PollingSchedulerService:
                     continue
 
                 for group_id in monitored_group_ids:
-                    await self._run_member_profile_check(group_id)
+                    await self._group_runtime_service.run_member_profile_poll_check(group_id)
                     await self._sleep(GROUP_CHECK_SPACING_SECONDS)
 
                 await self._sleep(config.member_profile_poll_interval_seconds)

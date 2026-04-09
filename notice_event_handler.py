@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 try:
     from astrbot.api import logger
@@ -9,7 +9,7 @@ try:
 
     from .log_dispatch_service import LogDispatchService
     from .message_recall_service import MessageRecallService
-    from .models import PluginConfig, SourceGroupConfig
+    from .models import SourceGroupConfig
     from .notice_adapter import GroupNoticeEvent, parse_group_notice
 except ImportError:
     logger = logging.getLogger(__name__)
@@ -17,16 +17,16 @@ except ImportError:
 
     from log_dispatch_service import LogDispatchService
     from message_recall_service import MessageRecallService
-    from models import PluginConfig, SourceGroupConfig
+    from models import SourceGroupConfig
     from notice_adapter import GroupNoticeEvent, parse_group_notice
 
 if TYPE_CHECKING:
-    GroupNameRollbackHandler = Callable[
-        [GroupNoticeEvent, list[str]],
-        Awaitable[None],
-    ]
-    PushTargetResolver = Callable[[SourceGroupConfig], list[str]]
-    ConfigProvider = Callable[[], PluginConfig]
+    try:
+        from .group_runtime_service import GroupRuntimeService
+        from .plugin_runtime_state import PluginRuntimeState
+    except ImportError:
+        from group_runtime_service import GroupRuntimeService
+        from plugin_runtime_state import PluginRuntimeState
 
 
 class NoticeEventHandler:
@@ -34,24 +34,22 @@ class NoticeEventHandler:
 
     def __init__(
         self,
-        config_provider: "ConfigProvider",
-        push_target_resolver: "PushTargetResolver",
+        runtime_state: "PluginRuntimeState",
         log_dispatcher: LogDispatchService,
         message_recall_service: MessageRecallService,
-        group_name_rollback_handler: "GroupNameRollbackHandler",
+        group_runtime_service: "GroupRuntimeService",
     ) -> None:
-        self._config_provider = config_provider
-        self._push_target_resolver = push_target_resolver
+        self._runtime_state = runtime_state
         self._log_dispatcher = log_dispatcher
         self._message_recall_service = message_recall_service
-        self._group_name_rollback_handler = group_name_rollback_handler
+        self._group_runtime_service = group_runtime_service
 
     async def handle_raw_notice(
         self,
         event: AstrMessageEvent,
         payload: dict[str, Any],
     ) -> None:
-        config = self._config_provider()
+        config = self._runtime_state.config
         if config.debug_raw_notice and payload.get("post_type") == "notice":
             logger.info("[GroupEventLog] raw notice payload: %s", payload)
 
@@ -65,7 +63,7 @@ class NoticeEventHandler:
         if not source_config.event_switches.get(notice.event_key, False):
             return
 
-        push_group_ids = self._push_target_resolver(source_config)
+        push_group_ids = self._group_runtime_service.resolve_enabled_push_targets(source_config)
         if notice.event_key == "group_recall":
             await self._message_recall_service.handle_group_recall(
                 event,
@@ -78,4 +76,4 @@ class NoticeEventHandler:
         if push_group_ids:
             await self._log_dispatcher.dispatch_notice_logs(event, notice, push_group_ids)
         if notice.event_key == "notify.group_name" and source_config.group_name_rollback_enabled:
-            await self._group_name_rollback_handler(notice, push_group_ids)
+            await self._group_runtime_service.handle_group_name_rollback(notice, push_group_ids)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 try:
     from astrbot.api.event import AstrMessageEvent, MessageEventResult
@@ -24,6 +24,7 @@ try:
         PushAction,
         SwitchValue,
     )
+    from .message_recall_service import MessageRecallService
     from .models import PluginConfig, PushGroupConfig, SourceGroupConfig
 except ImportError:
     from glog_command_constants import (
@@ -34,27 +35,34 @@ except ImportError:
         PushAction,
         SwitchValue,
     )
+    from message_recall_service import MessageRecallService
     from models import PluginConfig, PushGroupConfig, SourceGroupConfig
+
+if TYPE_CHECKING:
+    try:
+        from .group_context_service import GroupContextService
+        from .plugin_runtime_state import PluginRuntimeState
+        from .runtime_config_store import RuntimeConfigStore
+    except ImportError:
+        from group_context_service import GroupContextService
+        from plugin_runtime_state import PluginRuntimeState
+        from runtime_config_store import RuntimeConfigStore
 
 
 class GlogConfigService:
     def __init__(
         self,
         permissions: Any,
-        get_config: Callable[[], PluginConfig],
-        save_config: Callable[[], Awaitable[None]],
-        current_group_id: Callable[[AstrMessageEvent], str],
-        can_manage_source_group: Callable[[AstrMessageEvent, str], Awaitable[bool]],
-        resolve_bind_args: Callable[[AstrMessageEvent, list[str]], tuple[str, str, str]],
-        clear_group_message_cache: Callable[[str], None],
+        runtime_state: "PluginRuntimeState",
+        runtime_config_store: "RuntimeConfigStore",
+        group_context_service: "GroupContextService",
+        message_recall_service: MessageRecallService,
     ) -> None:
         self._permissions = permissions
-        self._get_config = get_config
-        self._save_config = save_config
-        self._current_group_id = current_group_id
-        self._can_manage_source_group = can_manage_source_group
-        self._resolve_bind_args = resolve_bind_args
-        self._clear_group_message_cache = clear_group_message_cache
+        self._runtime_state = runtime_state
+        self._runtime_config_store = runtime_config_store
+        self._group_context_service = group_context_service
+        self._message_recall_service = message_recall_service
 
     def build_help_result(self) -> MessageEventResult:
         return self._message(HELP_TEXT)
@@ -62,8 +70,8 @@ class GlogConfigService:
     async def handle_status(
         self, event: AstrMessageEvent, args: list[str]
     ) -> MessageEventResult:
-        config = self._get_config()
-        current_group_id = self._current_group_id(event)
+        config = self._runtime_state.config
+        current_group_id = self._group_context_service.current_group_id(event)
         is_global_admin = self._permissions.is_global_admin(event)
         target_group_id = current_group_id
 
@@ -123,7 +131,7 @@ class GlogConfigService:
         if not self._permissions.is_global_admin(event):
             return self._message("global admin permission required")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         monitored_lines = [
             f"{group_id}: {'on' if group_config.enabled else 'off'} -> "
             f"{', '.join(group_config.push_group_ids) or '-'} "
@@ -151,30 +159,37 @@ class GlogConfigService:
         if len(args) != 1 or args[0].lower() not in ALL_SWITCH_VALUES:
             return self._message("usage: /glog plugin on|off")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         config.plugin_enabled = args[0].lower() == SwitchValue.ON
-        await self._save_config()
+        await self._runtime_config_store.save()
         return self._message(f"plugin_enabled set to {config.plugin_enabled}")
 
     async def handle_enable(
         self, event: AstrMessageEvent, args: list[str]
     ) -> MessageEventResult:
-        target_group_id = args[0].strip() if args else self._current_group_id(event)
+        target_group_id = (
+            args[0].strip()
+            if args
+            else self._group_context_service.current_group_id(event)
+        )
         if not target_group_id:
             return self._message(
                 "usage: /glog enable [group_id]\nrun it in a group or pass group_id"
             )
 
-        if not await self._can_manage_source_group(event, target_group_id):
+        if not await self._group_context_service.can_manage_source_group(
+            event,
+            target_group_id,
+        ):
             return self._message("no permission to enable this group")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         source_config = config.monitored_groups.get(target_group_id)
         if not source_config:
             source_config = SourceGroupConfig()
             config.monitored_groups[target_group_id] = source_config
         source_config.enabled = True
-        await self._save_config()
+        await self._runtime_config_store.save()
         return self._message(
             f"source group enabled: {target_group_id}\n"
             "the group will now listen silently for supported notice events"
@@ -183,23 +198,30 @@ class GlogConfigService:
     async def handle_disable(
         self, event: AstrMessageEvent, args: list[str]
     ) -> MessageEventResult:
-        target_group_id = args[0].strip() if args else self._current_group_id(event)
+        target_group_id = (
+            args[0].strip()
+            if args
+            else self._group_context_service.current_group_id(event)
+        )
         if not target_group_id:
             return self._message(
                 "usage: /glog disable [group_id]\nrun it in a group or pass group_id"
             )
 
-        if not await self._can_manage_source_group(event, target_group_id):
+        if not await self._group_context_service.can_manage_source_group(
+            event,
+            target_group_id,
+        ):
             return self._message("no permission to disable this group")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         source_config = config.monitored_groups.get(target_group_id)
         if not source_config:
             source_config = SourceGroupConfig(enabled=False)
             config.monitored_groups[target_group_id] = source_config
         else:
             source_config.enabled = False
-        await self._save_config()
+        await self._runtime_config_store.save()
         return self._message(
             f"source group disabled: {target_group_id}\n"
             "the group will no longer be monitored"
@@ -221,14 +243,14 @@ class GlogConfigService:
         if not group_id:
             return self._message("push group_id is required")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         push_group = config.push_groups.get(group_id)
         if not push_group:
             push_group = PushGroupConfig()
             config.push_groups[group_id] = push_group
 
         push_group.enabled = action == PushAction.ENABLE
-        await self._save_config()
+        await self._runtime_config_store.save()
         return self._message(
             f"push group {group_id} set to {'enabled' if push_group.enabled else 'disabled'}"
         )
@@ -236,14 +258,20 @@ class GlogConfigService:
     async def handle_bind(
         self, event: AstrMessageEvent, args: list[str]
     ) -> MessageEventResult:
-        source_group_id, push_group_id, error = self._resolve_bind_args(event, args)
+        source_group_id, push_group_id, error = self._group_context_service.resolve_bind_args(
+            event,
+            args,
+        )
         if error:
             return self._message(error)
 
-        if not await self._can_manage_source_group(event, source_group_id):
+        if not await self._group_context_service.can_manage_source_group(
+            event,
+            source_group_id,
+        ):
             return self._message("no permission to manage this source group")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         source_config = config.monitored_groups.get(source_group_id)
         if not source_config or not source_config.enabled:
             return self._message(f"source group {source_group_id} is not enabled yet")
@@ -254,28 +282,34 @@ class GlogConfigService:
 
         if push_group_id not in source_config.push_group_ids:
             source_config.push_group_ids.append(push_group_id)
-            await self._save_config()
+            await self._runtime_config_store.save()
 
         return self._message(f"bound source {source_group_id} -> push {push_group_id}")
 
     async def handle_unbind(
         self, event: AstrMessageEvent, args: list[str]
     ) -> MessageEventResult:
-        source_group_id, push_group_id, error = self._resolve_bind_args(event, args)
+        source_group_id, push_group_id, error = self._group_context_service.resolve_bind_args(
+            event,
+            args,
+        )
         if error:
             return self._message(error)
 
-        if not await self._can_manage_source_group(event, source_group_id):
+        if not await self._group_context_service.can_manage_source_group(
+            event,
+            source_group_id,
+        ):
             return self._message("no permission to manage this source group")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         source_config = config.monitored_groups.get(source_group_id)
         if not source_config:
             return self._message(f"source group {source_group_id} is not configured")
 
         if push_group_id in source_config.push_group_ids:
             source_config.push_group_ids.remove(push_group_id)
-            await self._save_config()
+            await self._runtime_config_store.save()
 
         return self._message(f"unbound source {source_group_id} -> push {push_group_id}")
 
@@ -289,14 +323,21 @@ class GlogConfigService:
         if switch_value not in ALL_SWITCH_VALUES:
             return self._message("recall switch must be on or off")
 
-        target_group_id = args[1].strip() if len(args) >= 2 else self._current_group_id(event)
+        target_group_id = (
+            args[1].strip()
+            if len(args) >= 2
+            else self._group_context_service.current_group_id(event)
+        )
         if not target_group_id:
             return self._message("run this command in a group or pass group_id explicitly")
 
-        if not await self._can_manage_source_group(event, target_group_id):
+        if not await self._group_context_service.can_manage_source_group(
+            event,
+            target_group_id,
+        ):
             return self._message("no permission to manage this source group")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         source_config = config.monitored_groups.get(target_group_id)
         if not source_config or not source_config.enabled:
             return self._message(f"source group {target_group_id} is not enabled yet")
@@ -304,8 +345,8 @@ class GlogConfigService:
         enabled = switch_value == SwitchValue.ON
         source_config.recall_message_enabled = enabled
         if not enabled:
-            self._clear_group_message_cache(target_group_id)
-        await self._save_config()
+            self._message_recall_service.clear_group_cache(target_group_id)
+        await self._runtime_config_store.save()
         return self._message(
             f"recalled message content for {target_group_id} set to {switch_value}"
         )
@@ -322,9 +363,9 @@ class GlogConfigService:
         if error:
             return self._message(error)
 
-        config = self._get_config()
+        config = self._runtime_state.config
         config.avatar_poll_interval_seconds = seconds
-        await self._save_config()
+        await self._runtime_config_store.save()
         return self._message(
             f"avatar hash poll interval set to {config.avatar_poll_interval_seconds} seconds"
         )
@@ -341,9 +382,9 @@ class GlogConfigService:
         if error:
             return self._message(error)
 
-        config = self._get_config()
+        config = self._runtime_state.config
         config.member_profile_poll_interval_seconds = seconds
-        await self._save_config()
+        await self._runtime_config_store.save()
         return self._message(
             "member profile poll interval set to "
             f"{config.member_profile_poll_interval_seconds} seconds"
@@ -359,20 +400,27 @@ class GlogConfigService:
         if switch_value not in ALL_SWITCH_VALUES:
             return self._message("poll switch must be on or off")
 
-        target_group_id = args[1].strip() if len(args) >= 2 else self._current_group_id(event)
+        target_group_id = (
+            args[1].strip()
+            if len(args) >= 2
+            else self._group_context_service.current_group_id(event)
+        )
         if not target_group_id:
             return self._message("run this command in a group or pass group_id explicitly")
 
-        if not await self._can_manage_source_group(event, target_group_id):
+        if not await self._group_context_service.can_manage_source_group(
+            event,
+            target_group_id,
+        ):
             return self._message("no permission to manage this source group")
 
-        config = self._get_config()
+        config = self._runtime_state.config
         source_config = config.monitored_groups.get(target_group_id)
         if not source_config or not source_config.enabled:
             return self._message(f"source group {target_group_id} is not enabled yet")
 
         source_config.member_profile_polling_enabled = switch_value == SwitchValue.ON
-        await self._save_config()
+        await self._runtime_config_store.save()
         return self._message(
             f"member profile polling for {target_group_id} set to {switch_value}"
         )

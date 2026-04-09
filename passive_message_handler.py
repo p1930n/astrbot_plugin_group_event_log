@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Awaitable, Callable
+from typing import TYPE_CHECKING, Any
 
 try:
     from astrbot.api.event import AstrMessageEvent
@@ -13,16 +13,17 @@ except ImportError:
 
     from member_profile import normalize_sender_profile
     from message_recall_service import MessageRecallService
-    from models import PluginConfig, SourceGroupConfig
+    from models import SourceGroupConfig
 
 if TYPE_CHECKING:
-    ConfigProvider = Callable[[], PluginConfig]
-    CurrentGroupResolver = Callable[[AstrMessageEvent], str]
-    PushTargetResolver = Callable[[SourceGroupConfig], list[str]]
-    PassiveMemberProfileHandler = Callable[
-        [str, str, str | None, str | None, list[str]],
-        Awaitable[None],
-    ]
+    try:
+        from .group_context_service import GroupContextService
+        from .group_runtime_service import GroupRuntimeService
+        from .plugin_runtime_state import PluginRuntimeState
+    except ImportError:
+        from group_context_service import GroupContextService
+        from group_runtime_service import GroupRuntimeService
+        from plugin_runtime_state import PluginRuntimeState
 
 
 class PassiveMessageHandler:
@@ -30,24 +31,22 @@ class PassiveMessageHandler:
 
     def __init__(
         self,
-        config_provider: "ConfigProvider",
-        current_group_resolver: "CurrentGroupResolver",
-        push_target_resolver: "PushTargetResolver",
+        runtime_state: "PluginRuntimeState",
+        group_context_service: "GroupContextService",
         message_recall_service: MessageRecallService,
-        passive_member_profile_handler: "PassiveMemberProfileHandler",
+        group_runtime_service: "GroupRuntimeService",
     ) -> None:
-        self._config_provider = config_provider
-        self._current_group_resolver = current_group_resolver
-        self._push_target_resolver = push_target_resolver
+        self._runtime_state = runtime_state
+        self._group_context_service = group_context_service
         self._message_recall_service = message_recall_service
-        self._passive_member_profile_handler = passive_member_profile_handler
+        self._group_runtime_service = group_runtime_service
 
     async def handle_group_message(self, event: AstrMessageEvent) -> None:
-        group_id = self._current_group_resolver(event)
+        group_id = self._group_context_service.current_group_id(event)
         if not group_id:
             return
 
-        config = self._config_provider()
+        config = self._runtime_state.config
         source_config = config.monitored_groups.get(group_id)
         if not source_config or not source_config.enabled:
             return
@@ -72,8 +71,8 @@ class PassiveMessageHandler:
         if not user_id:
             return
 
-        push_group_ids = self._push_target_resolver(source_config)
-        await self._passive_member_profile_handler(
+        push_group_ids = self._group_runtime_service.resolve_enabled_push_targets(source_config)
+        await self._group_runtime_service.handle_passive_member_profile(
             group_id,
             user_id,
             sender_profile.card,

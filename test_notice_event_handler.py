@@ -2,6 +2,7 @@ import unittest
 
 from models import PluginConfig, PushGroupConfig, SourceGroupConfig
 from notice_event_handler import NoticeEventHandler
+from plugin_runtime_state import PluginRuntimeState
 
 
 class FakeLogDispatcher:
@@ -39,31 +40,40 @@ class FakeMessageRecallService:
         )
 
 
+class FakeGroupRuntimeService:
+    def __init__(self) -> None:
+        self.rollback_calls: list[tuple[str, list[str]]] = []
+
+    def resolve_enabled_push_targets(self, source_config: SourceGroupConfig) -> list[str]:
+        return list(source_config.push_group_ids)
+
+    async def handle_group_name_rollback(self, notice, push_group_ids: list[str]) -> None:
+        self.rollback_calls.append((notice.group_id, list(push_group_ids)))
+
+
 class NoticeEventHandlerTests(unittest.IsolatedAsyncioTestCase):
     async def test_group_recall_routes_to_recall_service_only(self) -> None:
-        config = PluginConfig(
-            monitored_groups={
-                "10001": SourceGroupConfig(
-                    enabled=True,
-                    push_group_ids=["30001"],
-                    recall_message_enabled=True,
-                )
-            },
-            push_groups={"30001": PushGroupConfig(enabled=True)},
+        runtime_state = PluginRuntimeState(
+            config=PluginConfig(
+                monitored_groups={
+                    "10001": SourceGroupConfig(
+                        enabled=True,
+                        push_group_ids=["30001"],
+                        recall_message_enabled=True,
+                    )
+                },
+                push_groups={"30001": PushGroupConfig(enabled=True)},
+            )
         )
         log_dispatcher = FakeLogDispatcher()
         recall_service = FakeMessageRecallService()
-        rollback_calls: list[tuple[str, list[str]]] = []
-
-        async def handle_group_name_rollback(notice, push_group_ids: list[str]) -> None:
-            rollback_calls.append((notice.group_id, list(push_group_ids)))
+        group_runtime_service = FakeGroupRuntimeService()
 
         handler = NoticeEventHandler(
-            lambda: config,
-            lambda source_config: list(source_config.push_group_ids),
+            runtime_state,
             log_dispatcher,
             recall_service,
-            handle_group_name_rollback,
+            group_runtime_service,
         )
         payload = {
             "post_type": "notice",
@@ -78,32 +88,30 @@ class NoticeEventHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(recall_service.calls[0]["push_group_ids"], ["30001"])
         self.assertTrue(recall_service.calls[0]["show_message_content"])
         self.assertEqual(log_dispatcher.notice_calls, [])
-        self.assertEqual(rollback_calls, [])
+        self.assertEqual(group_runtime_service.rollback_calls, [])
 
     async def test_group_name_notice_dispatches_log_and_rollback(self) -> None:
-        config = PluginConfig(
-            monitored_groups={
-                "10001": SourceGroupConfig(
-                    enabled=True,
-                    push_group_ids=["30001"],
-                    group_name_rollback_enabled=True,
-                )
-            },
-            push_groups={"30001": PushGroupConfig(enabled=True)},
+        runtime_state = PluginRuntimeState(
+            config=PluginConfig(
+                monitored_groups={
+                    "10001": SourceGroupConfig(
+                        enabled=True,
+                        push_group_ids=["30001"],
+                        group_name_rollback_enabled=True,
+                    )
+                },
+                push_groups={"30001": PushGroupConfig(enabled=True)},
+            )
         )
         log_dispatcher = FakeLogDispatcher()
         recall_service = FakeMessageRecallService()
-        rollback_calls: list[tuple[str, list[str]]] = []
-
-        async def handle_group_name_rollback(notice, push_group_ids: list[str]) -> None:
-            rollback_calls.append((notice.group_id, list(push_group_ids)))
+        group_runtime_service = FakeGroupRuntimeService()
 
         handler = NoticeEventHandler(
-            lambda: config,
-            lambda source_config: list(source_config.push_group_ids),
+            runtime_state,
             log_dispatcher,
             recall_service,
-            handle_group_name_rollback,
+            group_runtime_service,
         )
         payload = {
             "post_type": "notice",
@@ -118,4 +126,4 @@ class NoticeEventHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(len(log_dispatcher.notice_calls), 1)
         self.assertEqual(log_dispatcher.notice_calls[0]["push_group_ids"], ["30001"])
         self.assertEqual(len(recall_service.calls), 0)
-        self.assertEqual(rollback_calls, [("10001", ["30001"])])
+        self.assertEqual(group_runtime_service.rollback_calls, [("10001", ["30001"])])

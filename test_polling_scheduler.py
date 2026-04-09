@@ -1,6 +1,7 @@
 import unittest
 
 from models import PluginConfig, SourceGroupConfig
+from plugin_runtime_state import PluginRuntimeState
 from polling_scheduler import BOT_READY_RETRY_SECONDS, PollingSchedulerService
 
 
@@ -14,11 +15,21 @@ class FakePollingBotApi:
         return True
 
 
-class MutableRuntimeState:
-    def __init__(self, config: PluginConfig) -> None:
-        self.config = config
-        self.running = True
-        self.plugin_ready = True
+class FakeRuntimeSessionService:
+    async def is_active_runtime(self) -> bool:
+        return True
+
+
+class FakeGroupRuntimeService:
+    def __init__(self) -> None:
+        self.avatar_calls: list[str] = []
+        self.member_calls: list[str] = []
+
+    async def run_avatar_poll_check(self, group_id: str) -> None:
+        self.avatar_calls.append(group_id)
+
+    async def run_member_profile_poll_check(self, group_id: str) -> None:
+        self.member_calls.append(group_id)
 
 
 class PollingSchedulerServiceTests(unittest.IsolatedAsyncioTestCase):
@@ -30,39 +41,29 @@ class PollingSchedulerServiceTests(unittest.IsolatedAsyncioTestCase):
         disabled_avatar.event_switches["avatar_hash"] = False
         config.monitored_groups["10003"] = disabled_avatar
 
-        state = MutableRuntimeState(config)
+        state = PluginRuntimeState(config=config, is_ready=True, is_running=True)
         bot_api = FakePollingBotApi([True])
-        checked_groups: list[str] = []
+        runtime_session_service = FakeRuntimeSessionService()
+        group_runtime_service = FakeGroupRuntimeService()
         sleep_calls: list[float] = []
-
-        async def is_active_runtime() -> bool:
-            return True
-
-        async def run_avatar_check(group_id: str) -> None:
-            checked_groups.append(group_id)
-
-        async def run_member_profile_check(group_id: str) -> None:
-            raise AssertionError("member profile callback should not run")
 
         async def sleep_func(seconds: float) -> None:
             sleep_calls.append(seconds)
             if seconds == config.avatar_poll_interval_seconds:
-                state.running = False
+                state.is_running = False
 
         service = PollingSchedulerService(
             bot_api,
-            is_active_runtime,
-            lambda: state.plugin_ready,
-            lambda: state.running,
-            lambda: state.config,
-            run_avatar_check,
-            run_member_profile_check,
+            state,
+            runtime_session_service,
+            group_runtime_service,
             sleep_func=sleep_func,
         )
 
         await service.avatar_poll_loop()
 
-        self.assertEqual(checked_groups, ["10001"])
+        self.assertEqual(group_runtime_service.avatar_calls, ["10001"])
+        self.assertEqual(group_runtime_service.member_calls, [])
         self.assertIn(1, sleep_calls)
         self.assertIn(config.avatar_poll_interval_seconds, sleep_calls)
 
@@ -72,36 +73,26 @@ class PollingSchedulerServiceTests(unittest.IsolatedAsyncioTestCase):
             enabled=True,
             member_profile_polling_enabled=True,
         )
-        state = MutableRuntimeState(config)
+        state = PluginRuntimeState(config=config, is_ready=True, is_running=True)
         bot_api = FakePollingBotApi([False])
-        checked_groups: list[str] = []
+        runtime_session_service = FakeRuntimeSessionService()
+        group_runtime_service = FakeGroupRuntimeService()
         sleep_calls: list[float] = []
-
-        async def is_active_runtime() -> bool:
-            return True
-
-        async def run_avatar_check(group_id: str) -> None:
-            raise AssertionError("avatar callback should not run")
-
-        async def run_member_profile_check(group_id: str) -> None:
-            checked_groups.append(group_id)
 
         async def sleep_func(seconds: float) -> None:
             sleep_calls.append(seconds)
-            state.running = False
+            state.is_running = False
 
         service = PollingSchedulerService(
             bot_api,
-            is_active_runtime,
-            lambda: state.plugin_ready,
-            lambda: state.running,
-            lambda: state.config,
-            run_avatar_check,
-            run_member_profile_check,
+            state,
+            runtime_session_service,
+            group_runtime_service,
             sleep_func=sleep_func,
         )
 
         await service.member_profile_poll_loop()
 
-        self.assertEqual(checked_groups, [])
+        self.assertEqual(group_runtime_service.avatar_calls, [])
+        self.assertEqual(group_runtime_service.member_calls, [])
         self.assertEqual(sleep_calls, [BOT_READY_RETRY_SECONDS])
