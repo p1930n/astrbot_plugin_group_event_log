@@ -30,13 +30,13 @@ from .log_dispatch_service import LogDispatchService
 from .message_recall_service import MessageRecallService
 from .member_profile import (
     MemberProfileChange,
-    normalize_sender_profile,
     summarize_member_profile_state,
 )
 from .member_profile_service import MemberProfileService
 from .models import PluginConfig, SourceGroupConfig
 from .notice_adapter import GroupNoticeEvent
 from .notice_event_handler import NoticeEventHandler
+from .passive_message_handler import PassiveMessageHandler
 from .permissions import PermissionService
 from .polling_scheduler import PollingSchedulerService
 from .persistence import ConfigPersistence
@@ -83,6 +83,13 @@ class GroupEventLogPlugin(star.Star):
         )
         self._config = PluginConfig()
         self._message_recall_service = MessageRecallService(self._log_dispatcher)
+        self._passive_message_handler = PassiveMessageHandler(
+            lambda: self._config,
+            self._current_group_id,
+            self._get_enabled_push_targets,
+            self._message_recall_service,
+            self._handle_passive_member_profile,
+        )
         self._notice_event_handler = NoticeEventHandler(
             lambda: self._config,
             self._get_enabled_push_targets,
@@ -169,45 +176,7 @@ class GroupEventLogPlugin(star.Star):
             return MessageEventResult()
         if not self._is_ready or not self._config.plugin_enabled:
             return MessageEventResult()
-
-        group_id = self._current_group_id(event)
-        if not group_id:
-            return MessageEventResult()
-
-        source_config = self._config.monitored_groups.get(group_id)
-        if not source_config or not source_config.enabled:
-            return MessageEventResult()
-
-        raw = getattr(event, "message_obj", None)
-        payload = raw.raw_message if raw and hasattr(raw, "raw_message") else None
-        if not isinstance(payload, dict):
-            return MessageEventResult()
-
-        fallback_message_str = str(getattr(raw, "message_str", "") or "").strip()
-        fallback_message_id = str(getattr(raw, "message_id", "") or "").strip()
-        self._message_recall_service.cache_message(
-            payload,
-            source_config.recall_message_enabled,
-            fallback_message_str=fallback_message_str,
-            fallback_message_id=fallback_message_id,
-        )
-
-        sender = payload.get("sender", {})
-        sender_profile = normalize_sender_profile(sender)
-        user_id = sender_profile.user_id
-        if not user_id:
-            user_id = str(event.get_sender_id() or "").strip()
-        if not user_id:
-            return MessageEventResult()
-
-        source_push_group_ids = self._get_enabled_push_targets(source_config)
-        await self._handle_passive_member_profile(
-            group_id,
-            user_id,
-            sender_profile.card,
-            sender_profile.nickname,
-            source_push_group_ids,
-        )
+        await self._passive_message_handler.handle_group_message(event)
         return MessageEventResult()
 
     @filter.event_message_type(filter.EventMessageType.ALL)
