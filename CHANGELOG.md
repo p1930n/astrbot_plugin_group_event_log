@@ -8,6 +8,7 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 - **AstrBot Compliance Roadmap**: Updated Phase 11 in `TODO.md` to prioritize AstrBot root data-directory migration, callback removal from service orchestration, and hot-reload task lifecycle guarantees before deeper persistence and adapter refactors.
 - **Runtime Data Root**: Moved plugin runtime state to AstrBot root `data/astrbot_plugin_group_event_log`, added compatibility migration for legacy plugin-local SQLite / probe / baseline files, and updated status output paths to point at the new runtime store.
 - **Runtime Orchestration Boundary**: Replaced `main.py` callback and lambda wiring with explicit runtime state, runtime session, runtime config, and group runtime services so scheduling, notice routing, passive profile updates, and glog commands no longer reverse-call plugin private methods.
+- **Native Async SQLite**: Added `aiosqlite`, converted `ConfigPersistence` and `SQLiteStateRepository` database I/O to native async operations, preserved `WAL` / `busy_timeout` and legacy migration semantics, and extended persistence tests to cover concurrent initialization.
 
 ### Refactored
 - **State Persistence**: Migrated high-frequency runtime state (avatar hash, group name guard, member profiles) from scattered JSON writes to SQLite.

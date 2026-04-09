@@ -1,5 +1,8 @@
+import asyncio
 import json
+import sqlite3
 import shutil
+import time
 import unittest
 from pathlib import Path
 
@@ -183,14 +186,45 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
             self.runtime_data_dir / "state.sqlite3",
         )
 
+    async def test_async_sqlite_init_supports_concurrent_access_and_preserves_wal(self) -> None:
+        persistence = ConfigPersistence(self.plugin_dir, self.runtime_root)
+
+        async def write_and_load(group_id: str) -> dict[str, object]:
+            await persistence.save_avatar_hash_state(
+                group_id,
+                {
+                    "group_id": group_id,
+                    "baseline_hash": f"hash-{group_id}",
+                },
+            )
+            return await persistence.load_avatar_hash_state(group_id)
+
+        results = await asyncio.gather(
+            write_and_load("10001"),
+            write_and_load("10002"),
+            write_and_load("10003"),
+        )
+
+        self.assertEqual(
+            [result["baseline_hash"] for result in results],
+            ["hash-10001", "hash-10002", "hash-10003"],
+        )
+
+        connection = sqlite3.connect(persistence.database_path)
+        try:
+            journal_mode = connection.execute("PRAGMA journal_mode").fetchone()[0]
+        finally:
+            connection.close()
+        self.assertEqual(str(journal_mode).lower(), "wal")
+
     async def test_legacy_sqlite_store_is_copied_and_baseline_paths_are_rewritten(self) -> None:
         legacy_repository = SQLiteStateRepository(self.legacy_data_dir)
         legacy_baseline_path = self.legacy_data_dir / "avatar_baseline" / "10001" / "baseline.png"
         legacy_baseline_path.parent.mkdir(parents=True, exist_ok=True)
         legacy_baseline_path.write_bytes(b"baseline")
 
-        legacy_repository.save_config({"plugin_enabled": False})
-        legacy_repository.save_avatar_hash_state(
+        await legacy_repository.save_config({"plugin_enabled": False})
+        await legacy_repository.save_avatar_hash_state(
             "10001",
             {
                 "group_id": "10001",
@@ -198,7 +232,7 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
                 "baseline_image_path": str(legacy_baseline_path),
             },
         )
-        legacy_repository.save_runtime_owner("legacy-runtime")
+        await legacy_repository.save_runtime_owner("legacy-runtime")
 
         persistence = ConfigPersistence(self.plugin_dir, self.runtime_root)
 
@@ -227,4 +261,13 @@ class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):
 
     def _reset_workspace(self) -> None:
         if self.workspace_root.exists():
-            shutil.rmtree(self.workspace_root)
+            last_error: PermissionError | None = None
+            for _ in range(10):
+                try:
+                    shutil.rmtree(self.workspace_root)
+                    return
+                except PermissionError as exc:
+                    last_error = exc
+                    time.sleep(0.05)
+            if last_error is not None:
+                raise last_error

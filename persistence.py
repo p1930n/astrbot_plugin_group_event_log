@@ -4,9 +4,8 @@ import asyncio
 import json
 import logging
 import shutil
-import threading
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any
 
 try:
     from .sqlite_repository import SQLiteStateRepository
@@ -21,9 +20,6 @@ except Exception:
 
 PLUGIN_DATA_DIR_NAME = "astrbot_plugin_group_event_log"
 
-T = TypeVar("T")
-
-
 class ConfigPersistence:
     def __init__(self, plugin_dir: Path, runtime_root: Path | None = None) -> None:
         self._plugin_dir = plugin_dir
@@ -36,7 +32,7 @@ class ConfigPersistence:
             self._data_dir,
             legacy_data_dirs=(self._legacy_data_dir,),
         )
-        self._prepare_lock = threading.Lock()
+        self._prepare_lock = asyncio.Lock()
         self._storage_prepared = False
 
     @property
@@ -47,111 +43,72 @@ class ConfigPersistence:
         return str(self._avatar_probe_dir / f"{group_id}.json")
 
     async def load_config(self) -> dict[str, Any]:
-        return await asyncio.to_thread(self._call_with_prepared_storage, self._repository.load_config)
+        await self._ensure_storage_prepared()
+        return await self._repository.load_config()
 
     async def save_config(self, data: dict[str, Any]) -> None:
-        await asyncio.to_thread(
-            self._call_with_prepared_storage,
-            self._repository.save_config,
-            data,
-        )
+        await self._ensure_storage_prepared()
+        await self._repository.save_config(data)
 
     async def load_avatar_probe(self, group_id: str) -> dict[str, Any]:
+        await self._ensure_storage_prepared()
         return await asyncio.to_thread(
-            self._call_with_prepared_storage,
             self._load_json_sync,
             self._avatar_probe_dir / f"{group_id}.json",
         )
 
     async def save_avatar_probe(self, group_id: str, data: dict[str, Any]) -> str:
+        await self._ensure_storage_prepared()
         return await asyncio.to_thread(
-            self._call_with_prepared_storage,
             self._save_avatar_probe_sync,
             group_id,
             data,
         )
 
     async def load_avatar_hash_state(self, group_id: str) -> dict[str, Any]:
-        return await asyncio.to_thread(self._load_avatar_hash_state_sync, group_id)
+        await self._ensure_storage_prepared()
+        state = await self._repository.load_avatar_hash_state(group_id)
+        return self._normalize_avatar_hash_state(state)
 
     async def save_avatar_hash_state(self, group_id: str, data: dict[str, Any]) -> str:
-        return await asyncio.to_thread(
-            self._save_avatar_hash_state_sync,
-            group_id,
-            data,
-        )
+        await self._ensure_storage_prepared()
+        normalized_data = self._normalize_avatar_hash_state(data)
+        return await self._repository.save_avatar_hash_state(group_id, normalized_data)
 
     async def load_group_name_guard(self, group_id: str) -> dict[str, Any]:
-        return await asyncio.to_thread(
-            self._call_with_prepared_storage,
-            self._repository.load_group_name_guard,
-            group_id,
-        )
+        await self._ensure_storage_prepared()
+        return await self._repository.load_group_name_guard(group_id)
 
     async def save_group_name_guard(self, group_id: str, data: dict[str, Any]) -> str:
-        return await asyncio.to_thread(
-            self._call_with_prepared_storage,
-            self._repository.save_group_name_guard,
-            group_id,
-            data,
-        )
+        await self._ensure_storage_prepared()
+        return await self._repository.save_group_name_guard(group_id, data)
 
     async def load_member_profile_state(self, group_id: str) -> dict[str, Any]:
-        return await asyncio.to_thread(
-            self._call_with_prepared_storage,
-            self._repository.load_member_profile_state,
-            group_id,
-        )
+        await self._ensure_storage_prepared()
+        return await self._repository.load_member_profile_state(group_id)
 
     async def save_member_profile_state(self, group_id: str, data: dict[str, Any]) -> str:
-        return await asyncio.to_thread(
-            self._call_with_prepared_storage,
-            self._repository.save_member_profile_state,
-            group_id,
-            data,
-        )
+        await self._ensure_storage_prepared()
+        return await self._repository.save_member_profile_state(group_id, data)
 
     async def load_runtime_owner(self) -> str:
-        return await asyncio.to_thread(
-            self._call_with_prepared_storage,
-            self._repository.load_runtime_owner,
-        )
+        await self._ensure_storage_prepared()
+        return await self._repository.load_runtime_owner()
 
     async def save_runtime_owner(self, token: str) -> None:
-        await asyncio.to_thread(
-            self._call_with_prepared_storage,
-            self._repository.save_runtime_owner,
-            token,
-        )
+        await self._ensure_storage_prepared()
+        await self._repository.save_runtime_owner(token)
 
     async def save_avatar_baseline_image(
         self, group_id: str, image_bytes: bytes, suffix: str
     ) -> str:
+        await self._ensure_storage_prepared()
         return await asyncio.to_thread(
-            self._call_with_prepared_storage,
             self._save_avatar_baseline_image_sync,
             group_id,
             image_bytes,
             suffix,
         )
-
-    def _call_with_prepared_storage(
-        self,
-        callback: Callable[..., T],
-        *args: Any,
-    ) -> T:
-        self._ensure_storage_prepared()
-        return callback(*args)
-
-    def _load_avatar_hash_state_sync(self, group_id: str) -> dict[str, Any]:
-        self._ensure_storage_prepared()
-        state = self._repository.load_avatar_hash_state(group_id)
-        return self._normalize_avatar_hash_state(state)
-
-    def _save_avatar_hash_state_sync(self, group_id: str, data: dict[str, Any]) -> str:
-        self._ensure_storage_prepared()
-        normalized_data = self._normalize_avatar_hash_state(data)
-        return self._repository.save_avatar_hash_state(group_id, normalized_data)
 
     def _save_avatar_probe_sync(self, group_id: str, data: dict[str, Any]) -> str:
         path = self._avatar_probe_dir / f"{group_id}.json"
@@ -173,17 +130,20 @@ class ConfigPersistence:
         path.write_bytes(image_bytes)
         return str(path)
 
-    def _ensure_storage_prepared(self) -> None:
+    async def _ensure_storage_prepared(self) -> None:
         if self._storage_prepared:
             return
 
-        with self._prepare_lock:
+        async with self._prepare_lock:
             if self._storage_prepared:
                 return
 
-            self._data_dir.mkdir(parents=True, exist_ok=True)
-            self._migrate_legacy_storage()
+            await asyncio.to_thread(self._prepare_storage_sync)
             self._storage_prepared = True
+
+    def _prepare_storage_sync(self) -> None:
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        self._migrate_legacy_storage()
 
     def _migrate_legacy_storage(self) -> None:
         if not self._legacy_data_dir.exists():

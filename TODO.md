@@ -1,6 +1,6 @@
 # 待办事项与技术债演进计划 (TODO / ARCHITECTURE)
 
-更新日期: 2026-04-09
+更新日期: 2026-04-10
 
 ## 当前实施进度
 
@@ -46,8 +46,8 @@
 待实施项：
 - [x] 优先级 0：持久化目录迁移到 AstrBot 根目录 `data/astrbot_plugin_group_event_log`。已切换运行时数据落盘位置，并补齐旧插件目录到新根目录的数据兼容迁移路径。
 - [x] 优先级 1：去回调化与主入口反向依赖清理。已移除 `main.py` 传入子服务的 `lambda` 与私有方法 callback，改为显式运行时状态、配置存取与群操作服务编排。
-- [ ] 优先级 1：SQLite 数据层原生异步化。需在获得许可引入 `aiosqlite` 后实施，将 `ConfigPersistence` / `SQLiteStateRepository` 的数据库 I/O 改为原生 async 接口，逐步移除 `asyncio.to_thread` 包裹的同步 `sqlite3` 调用。
-- [ ] 优先级 1：保留并验证 SQLite 的 WAL、`busy_timeout`、初始化迁移与目录迁移语义，避免异步化后引入新的 `database is locked` 高频异常，且不得破坏已有状态文件迁移链路。
+- [x] 优先级 1：SQLite 数据层原生异步化。已引入 `aiosqlite`，并将 `ConfigPersistence` / `SQLiteStateRepository` 的数据库 I/O 改为原生 async 接口，移除数据库路径上的 `asyncio.to_thread + sqlite3` 组合。
+- [x] 优先级 1：保留并验证 SQLite 的 WAL、`busy_timeout`、初始化迁移与目录迁移语义。异步化后已保持 `WAL` / `busy_timeout` 配置、旧 JSON / 旧 SQLite 迁移链路与运行时目录迁移语义，并补充并发初始化回归测试。
 - [ ] 优先级 2：头像回滚兼容性与诊断增强。继续排查 `set_group_portrait` 对本地绝对路径与 `file:///` 路径的接受差异，避免轮询回滚路径出现挂起、静默失败或回滚后校验失真。
 - [ ] 优先级 2：补强头像回滚链路日志上下文，至少区分基线路径缺失、目录迁移后路径失效、API 调用失败、回滚后哈希校验失败四类原因，便于线上排障。
 - [ ] 优先级 3：强化 `BotApiService` 防腐边界，继续收口 OneBot / NapCat 私有 payload 与参数差异，优先补齐标准化返回结构、错误语义和内部 typed DTO，避免宿主协议细节向业务服务扩散。
