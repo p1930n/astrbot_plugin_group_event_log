@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment
+.env
+.venv
+env/
+venv/
+ENV/
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Plugin Specific Data (Local state & DB)
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+
+# Temp & Test workspaces
+test_workspace/
+tmp*/
