@@ -13,10 +13,11 @@
 - [x] 阶段 10 / 子项 2：已引入 `message_recall_service.py`，将消息缓存、撤回命中与撤回日志调度从 `main.py` 剥离。
 - [x] 阶段 10 / 子项 3：已引入 `notice_event_handler.py`，将 `on_raw_notice` 中的解析、路由与业务分发从 `main.py` 剥离。
 - [x] 阶段 10 / 子项 4：已引入 `passive_message_handler.py`，将 `on_group_message` 中的消息缓存与被动成员资料更新从 `main.py` 剥离。
+- [x] 阶段 10 / 子项 5：已引入 `group_context_service.py`，将群上下文解析、bind 参数解析与权限边界判断从 `main.py` 剥离。
 
 ### 当前主线
-- [ ] 阶段 10：核心事件转接与锁分离。
-  这是当前唯一的主线重构阶段，目标是继续收缩 `main.py`，清理剩余事件编排、撤回流程和锁协调逻辑。
+- [x] 阶段 10：核心事件转接与锁分离。
+  主线重构已完成，`main.py` 已收缩为 IoC 装配、AstrBot 事件入口与薄回调。
 
 ## 阶段 10：核心事件转接与锁分离
 
@@ -28,7 +29,7 @@
 - [x] 剥离撤回缓存调度：围绕 `GroupMessageCache` 建立 `message_recall_service.py`，负责消息缓存、撤回事件命中与撤回日志调度。
 - [x] 切分 notice 事件流：创建 `notice_event_handler.py`，承接 `on_raw_notice` 中的解析、路由与事件分发，消除主入口中的 notice 分支扩张。
 - [x] 切分被动消息事件流：创建 `passive_message_handler.py`，承接 `on_group_message` 中的消息缓存和成员资料被动更新逻辑。
-- [ ] 聚合权限与公共解析工具：将 `_can_manage_source_group`、`_can_query_group_metadata`、`_current_group_id`、`_resolve_bind_args` 等边界辅助逻辑继续回收到更清晰的工具模块。
+- [x] 聚合权限与公共解析工具：将 `_can_manage_source_group`、`_can_query_group_metadata`、`_current_group_id`、`_resolve_bind_args` 等边界辅助逻辑回收到 `group_context_service.py`。
 
 验收标准：
 - `main.py` 不再直接维护分组锁字典。

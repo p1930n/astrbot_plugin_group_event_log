@@ -23,6 +23,7 @@ from .bot_api_service import BotApiService
 from .glog_command_handler import GlogCommandHandler
 from .glog_config_service import GlogConfigService
 from .glog_group_service import GlogGroupService
+from .group_context_service import GroupContextService
 from .group_name_guard import summarize_group_name_guard
 from .group_name_guard_service import GroupNameGuardService
 from .group_task_coordinator import GroupTaskCoordinator
@@ -55,6 +56,7 @@ class GroupEventLogPlugin(star.Star):
         self._plugin_dir = Path(__file__).parent
         self._persistence = ConfigPersistence(self._plugin_dir)
         self._permissions = PermissionService(context)
+        self._group_context_service = GroupContextService(self._permissions)
         self._bot_api = BotApiService(self._permissions)
         self._log_dispatcher = LogDispatchService(self._bot_api)
         self._avatar_guard = AvatarGuardService(
@@ -85,7 +87,7 @@ class GroupEventLogPlugin(star.Star):
         self._message_recall_service = MessageRecallService(self._log_dispatcher)
         self._passive_message_handler = PassiveMessageHandler(
             lambda: self._config,
-            self._current_group_id,
+            self._group_context_service.current_group_id,
             self._get_enabled_push_targets,
             self._message_recall_service,
             self._handle_passive_member_profile,
@@ -101,16 +103,16 @@ class GroupEventLogPlugin(star.Star):
             self._permissions,
             lambda: self._config,
             self._save_config,
-            self._current_group_id,
-            self._can_manage_source_group,
-            self._resolve_bind_args,
+            self._group_context_service.current_group_id,
+            self._group_context_service.can_manage_source_group,
+            self._group_context_service.resolve_bind_args,
             self._message_recall_service.clear_group_cache,
         )
         self._glog_group_service = GlogGroupService(
             lambda: self._config,
-            self._current_group_id,
-            self._can_manage_source_group,
-            self._can_query_group_metadata,
+            self._group_context_service.current_group_id,
+            self._group_context_service.can_manage_source_group,
+            self._group_context_service.can_query_group_metadata,
             self._cmd_avatar_probe,
             self._cmd_avatar_check,
             self._cmd_avatar_status,
@@ -334,52 +336,6 @@ class GroupEventLogPlugin(star.Star):
         lines.append(f"member_profile_state_record_key: member_profile_states/{group_id}")
         return MessageEventResult().message("\n".join(lines))
 
-    async def _can_manage_source_group(
-        self, event: AstrMessageEvent, source_group_id: str
-    ) -> bool:
-        if self._permissions.is_global_admin(event):
-            return True
-
-        current_group_id = self._current_group_id(event)
-        if not current_group_id or current_group_id != source_group_id:
-            return False
-
-        user_id = str(event.get_sender_id())
-        return await self._permissions.is_group_admin_or_owner(
-            event, user_id, source_group_id
-        )
-
-    async def _can_query_group_metadata(
-        self, event: AstrMessageEvent, group_id: str
-    ) -> bool:
-        if self._permissions.is_global_admin(event):
-            return True
-
-        current_group_id = self._current_group_id(event)
-        if not current_group_id or current_group_id != group_id:
-            return False
-
-        user_id = str(event.get_sender_id())
-        return await self._permissions.is_group_admin_or_owner(event, user_id, group_id)
-
-    def _resolve_bind_args(
-        self, event: AstrMessageEvent, args: list[str]
-    ) -> tuple[str, str, str]:
-        if len(args) == 1:
-            source_group_id = self._current_group_id(event)
-            push_group_id = args[0].strip()
-            if not source_group_id:
-                return "", "", "usage: /glog bind <source_group_id> <push_group_id>"
-            return source_group_id, push_group_id, ""
-
-        if len(args) == 2:
-            return args[0].strip(), args[1].strip(), ""
-
-        return "", "", (
-            "usage: /glog bind <push_group_id>\n"
-            "usage: /glog bind <source_group_id> <push_group_id>"
-        )
-
     def _get_enabled_push_targets(self, source_config: SourceGroupConfig) -> list[str]:
         result: list[str] = []
         for push_group_id in source_config.push_group_ids:
@@ -461,9 +417,6 @@ class GroupEventLogPlugin(star.Star):
     ) -> None:
         async with self._group_task_coordinator.group_name_lock(notice.group_id):
             await self._group_name_guard.handle_rollback(notice, push_group_ids)
-
-    def _current_group_id(self, event: AstrMessageEvent) -> str:
-        return str(event.get_group_id() or "").strip()
 
     async def _is_active_runtime(self) -> bool:
         owner = await self._persistence.load_runtime_owner()

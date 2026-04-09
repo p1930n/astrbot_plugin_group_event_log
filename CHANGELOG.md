@@ -13,6 +13,7 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 - **Message Recall Flow**: Added `message_recall_service.py` to encapsulate message caching, recall hit lookup, and recall log dispatch from `main.py`.
 - **Notice Event Flow**: Added `notice_event_handler.py` to encapsulate notice parsing, config gating, recall routing, and group-name rollback dispatch from `main.py`.
 - **Passive Message Flow**: Added `passive_message_handler.py` to encapsulate group-message cache writes and passive member-profile routing from `main.py`.
+- **Group Context Extraction**: Added `group_context_service.py` to encapsulate current-group resolution, bind-argument parsing, and source-group permission checks from `main.py`.
 
 ### Added
 - **Test Coverage**: Added integration test suites: `test_persistence.py`, `test_services.py`, `test_avatar_guard_service.py`, `test_member_profile_service.py`, `test_polling_scheduler.py`, `test_glog_command_handler.py`, and `test_avatar_hash.py`.
