@@ -15,9 +15,9 @@ class CommandContext:
     @classmethod
     def from_event(cls, event: Any) -> "CommandContext":
         return cls(
-            message_text=str(event.get_message_str() or ""),
-            group_id=str(event.get_group_id() or "").strip(),
-            sender_id=str(event.get_sender_id() or "").strip(),
+            message_text=_call_string(event, "get_message_str"),
+            group_id=_call_string(event, "get_group_id"),
+            sender_id=_call_string(event, "get_sender_id"),
             platform=_call_string(event, "get_platform_name"),
             source_event=event,
         )

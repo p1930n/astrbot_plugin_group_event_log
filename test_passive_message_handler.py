@@ -1,6 +1,7 @@
 import unittest
 from types import SimpleNamespace
 
+from commands.command_context import CommandContext
 from domain.models import PluginConfig, PushGroupConfig, SourceGroupConfig
 from runtime.passive_message_handler import PassiveMessageHandler
 from runtime.plugin_runtime_state import PluginRuntimeState
@@ -28,8 +29,10 @@ class FakeMessageRecallService:
 
 
 class FakeGroupContextService:
-    def current_group_id(self, event) -> str:
-        return str(event.get_group_id() or "").strip()
+    def current_group_id(self, context: CommandContext) -> str:
+        if not isinstance(context, CommandContext):
+            raise AssertionError("passive handler must pass dehydrated CommandContext")
+        return context.group_id
 
 
 class FakeGroupRuntimeService:
@@ -133,3 +136,47 @@ class PassiveMessageHandlerTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertEqual(recall_service.cache_calls, [])
         self.assertEqual(group_runtime_service.calls, [])
+
+    async def test_handle_group_message_does_not_require_event_group_id_attribute(
+        self,
+    ) -> None:
+        runtime_state = PluginRuntimeState(
+            config=PluginConfig(
+                monitored_groups={
+                    "10001": SourceGroupConfig(
+                        enabled=True,
+                        push_group_ids=[],
+                        recall_message_enabled=True,
+                    )
+                },
+            )
+        )
+        recall_service = FakeMessageRecallService()
+        group_runtime_service = FakeGroupRuntimeService()
+
+        handler = PassiveMessageHandler(
+            runtime_state,
+            FakeGroupContextService(),
+            recall_service,
+            group_runtime_service,
+        )
+        event = SimpleNamespace(
+            get_group_id=lambda: "10001",
+            get_sender_id=lambda: "20001",
+            message_obj=SimpleNamespace(
+                raw_message={
+                    "post_type": "message",
+                    "message_type": "group",
+                    "group_id": "10001",
+                    "message_id": "50001",
+                    "sender": {"nickname": "nick-a"},
+                },
+                message_str="hello world",
+                message_id="50001",
+            ),
+        )
+
+        await handler.handle_group_message(event)
+
+        self.assertEqual(len(recall_service.cache_calls), 1)
+        self.assertEqual(len(group_runtime_service.calls), 1)
