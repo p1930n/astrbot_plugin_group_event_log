@@ -1,6 +1,7 @@
 import unittest
 from unittest.mock import patch
 
+from commands.command_context import CommandContext
 from commands.glog_command_constants import MIN_POLL_INTERVAL_SECONDS
 from commands.glog_command_handler import GlogCommandHandler
 from commands.glog_config_service import GlogConfigService
@@ -45,18 +46,41 @@ class FakePermissionService:
 
 
 class FakeGroupContextService:
-    async def can_manage_source_group(self, event, group_id: str) -> bool:
+    def __init__(self, permissions: FakePermissionService) -> None:
+        self._permissions = permissions
+
+    def set_permissions(self, permissions: FakePermissionService) -> None:
+        self._permissions = permissions
+
+    async def can_manage_source_group(
+        self,
+        context: CommandContext,
+        group_id: str,
+    ) -> bool:
         return True
 
-    async def can_query_group_metadata(self, event, group_id: str) -> bool:
+    async def can_query_group_metadata(
+        self,
+        context: CommandContext,
+        group_id: str,
+    ) -> bool:
         return True
 
-    def current_group_id(self, event) -> str:
-        return str(event.get_group_id() or "").strip()
+    def current_group_id(self, context: CommandContext) -> str:
+        return context.group_id
 
-    def resolve_bind_args(self, event, args: list[str]) -> tuple[str, str, str]:
+    def is_global_admin(self, context: CommandContext) -> bool:
+        if not context.source_event:
+            return False
+        return self._permissions.is_global_admin(context.source_event)
+
+    def resolve_bind_args(
+        self,
+        context: CommandContext,
+        args: list[str],
+    ) -> tuple[str, str, str]:
         if len(args) == 1:
-            source_group_id = self.current_group_id(event)
+            source_group_id = self.current_group_id(context)
             push_group_id = args[0].strip()
             if not source_group_id:
                 return "", "", "usage: /glog bind <source_group_id> <push_group_id>"
@@ -137,7 +161,7 @@ class CommandTestHarness:
     def __init__(self) -> None:
         self.runtime_state = PluginRuntimeState(config=PluginConfig())
         self.permission_service = FakePermissionService(is_global_admin=True)
-        self.group_context_service = FakeGroupContextService()
+        self.group_context_service = FakeGroupContextService(self.permission_service)
         self.runtime_config_store = FakeRuntimeConfigStore(self.runtime_state)
         self.message_recall_service = FakeMessageRecallService()
         self.group_runtime_service = FakeGroupRuntimeService()
@@ -152,6 +176,7 @@ class CommandTestHarness:
         event_switch_service: GlogEventSwitchService | None = None,
     ) -> GlogConfigService:
         self.permission_service = FakePermissionService(is_global_admin=is_global_admin)
+        self.group_context_service.set_permissions(self.permission_service)
         return GlogConfigService(
             self.permission_service,
             self.runtime_state,
@@ -191,12 +216,16 @@ class CommandTestHarness:
         )
 
 
+def command_context(event: FakeEvent) -> CommandContext:
+    return CommandContext.from_event(event)
+
+
 class GlogConfigServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_plugin_command_updates_global_switch_and_saves(self) -> None:
         harness = CommandTestHarness()
         service = harness.build_config_service(is_global_admin=True)
 
-        await service.handle_plugin(FakeEvent("/glog plugin off"), ["off"])
+        await service.handle_plugin(command_context(FakeEvent("/glog plugin off")), ["off"])
 
         self.assertFalse(harness.config.plugin_enabled)
         self.assertEqual(harness.runtime_config_store.save_calls, 1)
@@ -209,7 +238,10 @@ class GlogConfigServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         service = harness.build_config_service()
 
-        await service.handle_recall(FakeEvent("/glog recall off", group_id="10001"), ["off"])
+        await service.handle_recall(
+            command_context(FakeEvent("/glog recall off", group_id="10001")),
+            ["off"],
+        )
 
         self.assertFalse(harness.config.monitored_groups["10001"].recall_message_enabled)
         self.assertEqual(harness.message_recall_service.cleared_groups, ["10001"])
@@ -229,7 +261,10 @@ class GlogConfigServiceTests(unittest.IsolatedAsyncioTestCase):
             event_switch_service,
         )
 
-        await service.handle_enable(FakeEvent("/glog enable", group_id="10001"), [])
+        await service.handle_enable(
+            command_context(FakeEvent("/glog enable", group_id="10001")),
+            [],
+        )
 
         self.assertFalse(
             harness.config.monitored_groups["10001"].event_switches["bot_kick_member"]
@@ -243,10 +278,10 @@ class GlogConfigServiceTests(unittest.IsolatedAsyncioTestCase):
         harness.config.monitored_groups["10001"] = SourceGroupConfig(enabled=True)
         harness.config.push_groups["20001"] = PushGroupConfig(enabled=True)
         service = harness.build_config_service()
-        event = FakeEvent("/glog bind 20001", group_id="10001")
+        context = command_context(FakeEvent("/glog bind 20001", group_id="10001"))
 
-        await service.handle_bind(event, ["20001"])
-        await service.handle_bind(event, ["20001"])
+        await service.handle_bind(context, ["20001"])
+        await service.handle_bind(context, ["20001"])
 
         self.assertEqual(harness.config.monitored_groups["10001"].push_group_ids, ["20001"])
         self.assertEqual(harness.runtime_config_store.save_calls, 1)
@@ -256,7 +291,7 @@ class GlogConfigServiceTests(unittest.IsolatedAsyncioTestCase):
         service = harness.build_config_service(is_global_admin=True)
 
         result = await service.handle_member_interval(
-            FakeEvent("/glog member interval 10"),
+            command_context(FakeEvent("/glog member interval 10")),
             ["10"],
         )
 
@@ -271,7 +306,10 @@ class GlogGroupServiceTests(unittest.IsolatedAsyncioTestCase):
         harness = CommandTestHarness()
         service = harness.build_group_service()
 
-        await service.handle_avatar_check(FakeEvent("/glog avatar check", group_id="10001"), [])
+        await service.handle_avatar_check(
+            command_context(FakeEvent("/glog avatar check", group_id="10001")),
+            [],
+        )
 
         self.assertEqual(harness.group_runtime_service.avatar_check_calls, ["10001"])
         self.assertEqual(harness.group_runtime_service.member_check_calls, [])
@@ -282,7 +320,7 @@ class GlogGroupServiceTests(unittest.IsolatedAsyncioTestCase):
         service = harness.build_group_service()
 
         await service.handle_rollback(
-            FakeEvent("/glog rollback group_name on", group_id="10001"),
+            command_context(FakeEvent("/glog rollback group_name on", group_id="10001")),
             ["group_name", "on"],
         )
 
@@ -299,7 +337,7 @@ class GlogEventSwitchServiceTests(unittest.IsolatedAsyncioTestCase):
         service = harness.build_event_switch_service()
 
         result = await service.handle_event(
-            FakeEvent("/glog event kick off", group_id="10001"),
+            command_context(FakeEvent("/glog event kick off", group_id="10001")),
             ["kick", "off"],
         )
 
@@ -320,7 +358,7 @@ class GlogEventSwitchServiceTests(unittest.IsolatedAsyncioTestCase):
         service = harness.build_event_switch_service()
 
         result = await service.handle_event(
-            FakeEvent("/glog event status", group_id="10001"),
+            command_context(FakeEvent("/glog event status", group_id="10001")),
             ["status"],
         )
 

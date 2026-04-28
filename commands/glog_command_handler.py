@@ -19,6 +19,7 @@ except ImportError:
             return self
 
 try:
+    from .command_context import CommandContext
     from .glog_command_constants import GlogSubCommand
     from .glog_config_service import GlogConfigService
     from .glog_event_service import GlogEventSwitchService
@@ -40,6 +41,7 @@ try:
         UnbindCommandHandler,
     )
 except ImportError:
+    from commands.command_context import CommandContext
     from commands.glog_command_constants import GlogSubCommand
     from commands.glog_config_service import GlogConfigService
     from commands.glog_event_service import GlogEventSwitchService
@@ -88,9 +90,10 @@ class GlogCommandHandler:
         }
 
     async def handle_glog(self, event: AstrMessageEvent) -> MessageEventResult:
-        args = event.get_message_str().strip().split()
+        context = CommandContext.from_event(event)
+        args = context.message_text.strip().split()
         if len(args) < 2:
-            return await self._help_handler.handle(event, [])
+            return await self._help_handler.handle(context, [])
 
         sub_command = args[1].lower()
         command_handler = self._registry.get(sub_command)
@@ -98,7 +101,7 @@ class GlogCommandHandler:
             return self._message(f"unknown sub-command: {sub_command}\nuse /glog help")
 
         try:
-            return await command_handler.handle(event, args[2:])
+            return await command_handler.handle(context, args[2:])
         except Exception as exc:
             logger.error(
                 "[GroupEventLog] glog command failed sub_command=%s args=%s err=%s",

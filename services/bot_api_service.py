@@ -9,10 +9,24 @@ try:
         AvatarRollbackExecution,
         AvatarRollbackFailureReason,
     )
+    from ..platforms.bot_api_results import (
+        BotApiCallResult,
+        GroupInfoResult,
+        GroupMemberListResult,
+        GroupNameSetResult,
+        GroupPortraitSetResult,
+    )
     from astrbot.api import logger
     from astrbot.api.event import AstrMessageEvent
 except ImportError:
     from domain.avatar_guard_models import AvatarRollbackExecution, AvatarRollbackFailureReason
+    from platforms.bot_api_results import (
+        BotApiCallResult,
+        GroupInfoResult,
+        GroupMemberListResult,
+        GroupNameSetResult,
+        GroupPortraitSetResult,
+    )
     logger = logging.getLogger(__name__)
     AstrMessageEvent = Any
 
@@ -50,42 +64,65 @@ class BotApiService:
         group_id: str,
         event: AstrMessageEvent | None = None,
     ) -> dict[str, object]:
+        result = await self.call_group_metadata_result(action, group_id, event)
+        return result.as_legacy_dict()
+
+    async def call_group_metadata_result(
+        self,
+        action: str,
+        group_id: str,
+        event: AstrMessageEvent | None = None,
+    ) -> BotApiCallResult:
         bot = await self.get_bot(event)
         if not bot or not hasattr(bot, "api"):
-            return {
-                "ok": False,
-                "error": "no bot api available",
-            }
-        return await self.call_group_metadata_api_with_bot(bot, action, group_id)
+            return BotApiCallResult(
+                ok=False,
+                action=action,
+                error="no bot api available",
+            )
+        return await self.call_group_metadata_result_with_bot(bot, action, group_id)
 
     async def call_group_metadata_api_with_bot(
         self, bot: Any, action: str, group_id: str
     ) -> dict[str, object]:
+        result = await self.call_group_metadata_result_with_bot(bot, action, group_id)
+        return result.as_legacy_dict()
+
+    async def call_group_metadata_result_with_bot(
+        self, bot: Any, action: str, group_id: str
+    ) -> BotApiCallResult:
         try:
             data = await bot.api.call_action(action, group_id=int(group_id))
-            return {
-                "ok": True,
-                "data": data,
-            }
+            return BotApiCallResult(ok=True, action=action, data=data)
         except Exception as exc:
+            safe_error = self._safe_exception_message(exc, f"{action} failed")
             logger.error(
                 "[GroupEventLog] %s failed for group=%s err=%s",
                 action,
                 group_id,
-                exc,
+                safe_error,
             )
-            return {
-                "ok": False,
-                "error": str(exc),
-            }
+            return BotApiCallResult(
+                ok=False,
+                action=action,
+                error=safe_error,
+            )
 
     async def call_group_member_list_api(self, group_id: str) -> dict[str, object]:
+        result = await self.get_group_member_list_result(group_id)
+        return result.as_legacy_dict()
+
+    async def get_group_member_list_result(
+        self,
+        group_id: str,
+    ) -> GroupMemberListResult:
         bot = await self.get_bot()
         if not bot or not hasattr(bot, "api"):
-            return {
-                "ok": False,
-                "error": "no bot api available",
-            }
+            return GroupMemberListResult(
+                ok=False,
+                group_id=group_id,
+                error="no bot api available",
+            )
 
         try:
             data = await bot.api.call_action(
@@ -93,47 +130,87 @@ class BotApiService:
                 group_id=int(group_id),
                 no_cache=True,
             )
-            return {
-                "ok": True,
-                "data": data,
-            }
+            return GroupMemberListResult(
+                ok=True,
+                group_id=group_id,
+                payload=data,
+                used_no_cache=True,
+            )
         except Exception as first_exc:
             try:
                 data = await bot.api.call_action(
                     "get_group_member_list",
                     group_id=int(group_id),
                 )
-                return {
-                    "ok": True,
-                    "data": data,
-                }
+                return GroupMemberListResult(
+                    ok=True,
+                    group_id=group_id,
+                    payload=data,
+                    fallback_used=True,
+                )
             except Exception as second_exc:
+                first_error = self._safe_exception_message(
+                    first_exc,
+                    "get_group_member_list failed",
+                )
+                second_error = self._safe_exception_message(
+                    second_exc,
+                    "get_group_member_list failed",
+                )
                 logger.error(
                     "[GroupEventLog] get_group_member_list failed for group=%s err=%s / %s",
                     group_id,
-                    first_exc,
-                    second_exc,
+                    first_error,
+                    second_error,
                 )
-                return {
-                    "ok": False,
-                    "error": str(second_exc),
-                }
+                return GroupMemberListResult(
+                    ok=False,
+                    group_id=group_id,
+                    error=second_error,
+                )
 
     async def get_current_group_name(self, group_id: str) -> tuple[str, str]:
-        response = await self.call_group_metadata_api("get_group_info", group_id)
-        if not response.get("ok"):
-            return "", str(response.get("error", "get_group_info failed"))
+        result = await self.get_group_info_result(group_id)
+        if not result.ok:
+            return "", result.error
 
-        data = response.get("data", {})
-        if not isinstance(data, dict):
-            return "", "invalid group info payload"
+        return result.group_name, ""
 
-        return str(data.get("group_name", "")).strip(), ""
+    async def get_group_info_result(self, group_id: str) -> GroupInfoResult:
+        response = await self.call_group_metadata_result("get_group_info", group_id)
+        if not response.ok:
+            return GroupInfoResult(
+                ok=False,
+                group_id=group_id,
+                error=response.error or "get_group_info failed",
+            )
+
+        if not isinstance(response.data, dict):
+            return GroupInfoResult(
+                ok=False,
+                group_id=group_id,
+                error="invalid group info payload",
+            )
+
+        return GroupInfoResult(ok=True, group_id=group_id, payload=response.data)
 
     async def set_group_name(self, group_id: str, group_name: str) -> tuple[bool, str]:
+        result = await self.set_group_name_result(group_id, group_name)
+        return result.as_legacy_tuple()
+
+    async def set_group_name_result(
+        self,
+        group_id: str,
+        group_name: str,
+    ) -> GroupNameSetResult:
         bot = await self.get_bot()
         if not bot or not hasattr(bot, "api"):
-            return False, "no bot api available"
+            return GroupNameSetResult(
+                ok=False,
+                group_id=group_id,
+                group_name=group_name,
+                error="no bot api available",
+            )
 
         try:
             await bot.api.call_action(
@@ -141,9 +218,20 @@ class BotApiService:
                 group_id=int(group_id),
                 group_name=group_name,
             )
-            return True, ""
+            return GroupNameSetResult(ok=True, group_id=group_id, group_name=group_name)
         except Exception as exc:
-            return False, str(exc)
+            safe_error = self._safe_exception_message(exc, "set_group_name failed")
+            logger.error(
+                "[GroupEventLog] set_group_name failed for group=%s err=%s",
+                group_id,
+                safe_error,
+            )
+            return GroupNameSetResult(
+                ok=False,
+                group_id=group_id,
+                group_name=group_name,
+                error=safe_error,
+            )
 
     async def rollback_group_avatar(
         self, group_id: str, baseline_image_path: str
@@ -166,18 +254,39 @@ class BotApiService:
             )
             return AvatarRollbackExecution(
                 success=False,
-                error=path_error,
+                error=self._public_portrait_path_error(path_error),
                 failure_reason=AvatarRollbackFailureReason.PATH_UNREADABLE,
                 attempted_inputs=tuple(candidates),
             )
 
+        result = await self.set_group_portrait_result(group_id, candidates)
+        if result.ok:
+            return AvatarRollbackExecution(
+                success=True,
+                applied_input=result.applied_input,
+                attempted_inputs=result.attempted_inputs,
+            )
+
+        return AvatarRollbackExecution(
+            success=False,
+            error=result.error,
+            failure_reason=AvatarRollbackFailureReason.API_REJECTED,
+            attempted_inputs=result.attempted_inputs,
+        )
+
+    async def set_group_portrait_result(
+        self,
+        group_id: str,
+        candidates: list[str],
+    ) -> GroupPortraitSetResult:
+        attempted_inputs = tuple(candidates)
         bot = await self.get_bot()
         if not bot or not hasattr(bot, "api"):
-            return AvatarRollbackExecution(
-                success=False,
+            return GroupPortraitSetResult(
+                ok=False,
+                group_id=group_id,
+                attempted_inputs=attempted_inputs,
                 error="no bot api available",
-                failure_reason=AvatarRollbackFailureReason.API_REJECTED,
-                attempted_inputs=tuple(candidates),
             )
 
         last_error = "set_group_portrait failed"
@@ -188,24 +297,29 @@ class BotApiService:
                     group_id=int(group_id),
                     file=file_value,
                 )
-                return AvatarRollbackExecution(
-                    success=True,
+                return GroupPortraitSetResult(
+                    ok=True,
+                    group_id=group_id,
                     applied_input=file_value,
-                    attempted_inputs=tuple(candidates),
+                    attempted_inputs=attempted_inputs,
                 )
             except Exception as exc:
-                last_error = str(exc)
+                last_error = self._safe_exception_message(
+                    exc,
+                    "set_group_portrait failed",
+                    (file_value,),
+                )
         logger.error(
             "[GroupEventLog] set_group_portrait failed group=%s attempted_inputs=%s err=%s",
             group_id,
             candidates,
             last_error,
         )
-        return AvatarRollbackExecution(
-            success=False,
+        return GroupPortraitSetResult(
+            ok=False,
+            group_id=group_id,
             error=last_error,
-            failure_reason=AvatarRollbackFailureReason.API_REJECTED,
-            attempted_inputs=tuple(candidates),
+            attempted_inputs=attempted_inputs,
         )
 
     def _build_group_portrait_candidates(
@@ -238,3 +352,27 @@ class BotApiService:
         normalized = str(value).strip()
         if normalized and normalized not in candidates:
             candidates.append(normalized)
+
+    def _safe_exception_message(
+        self,
+        exc: Exception,
+        fallback: str,
+        sensitive_fragments: tuple[str, ...] = (),
+    ) -> str:
+        message = str(exc).strip()
+        if not message or "\n" in message or "\r" in message:
+            return fallback
+        lowered = message.lower()
+        sensitive_markers = ("token", "authorization", "cookie", "traceback")
+        if any(marker in lowered for marker in sensitive_markers):
+            return fallback
+        if any(fragment and fragment in message for fragment in sensitive_fragments):
+            return fallback
+        return message
+
+    def _public_portrait_path_error(self, path_error: str) -> str:
+        if "not found" in path_error:
+            return "baseline image path not found"
+        if "not a file" in path_error:
+            return "baseline image path is not a file"
+        return "baseline image path unreadable"

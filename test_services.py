@@ -21,9 +21,16 @@ class FakePermissionService:
 
 
 class FakeBotApi:
-    def __init__(self, fail_no_cache: bool = False) -> None:
+    def __init__(
+        self,
+        fail_no_cache: bool = False,
+        group_info_payload=None,
+        set_group_name_error: str = "",
+    ) -> None:
         self.calls: list[tuple[str, dict[str, object]]] = []
         self._fail_no_cache = fail_no_cache
+        self._group_info_payload = group_info_payload or {"group_name": "stable-name"}
+        self._set_group_name_error = set_group_name_error
         self.fail_login_info = False
 
     async def call_action(self, action: str, **kwargs):
@@ -36,6 +43,10 @@ class FakeBotApi:
             raise RuntimeError("no_cache unsupported")
         if action == "get_group_member_list":
             return [{"user_id": "1", "card": "", "nickname": "tester"}]
+        if action == "get_group_info":
+            return self._group_info_payload
+        if action == "set_group_name" and self._set_group_name_error:
+            raise RuntimeError(self._set_group_name_error)
         if action == "send_group_msg":
             return {"ok": True}
         return {"ok": True}
@@ -116,6 +127,40 @@ class BotApiServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(bot.api.calls[0][1]["no_cache"])
         self.assertEqual(bot.api.calls[1][0], "get_group_member_list")
         self.assertNotIn("no_cache", bot.api.calls[1][1])
+
+    async def test_group_member_list_result_exposes_fallback_state(self) -> None:
+        bot = SimpleNamespace(api=FakeBotApi(fail_no_cache=True))
+        service = BotApiService(FakePermissionService(None, bot))
+
+        result = await service.get_group_member_list_result("10001")
+
+        self.assertTrue(result.ok)
+        self.assertFalse(result.used_no_cache)
+        self.assertTrue(result.fallback_used)
+        self.assertEqual(
+            result.payload,
+            [{"user_id": "1", "card": "", "nickname": "tester"}],
+        )
+
+    async def test_group_info_result_normalizes_group_name(self) -> None:
+        bot = SimpleNamespace(
+            api=FakeBotApi(group_info_payload={"group_name": "  name  "})
+        )
+        service = BotApiService(FakePermissionService(None, bot))
+
+        result = await service.get_group_info_result("10001")
+
+        self.assertTrue(result.ok)
+        self.assertEqual(result.group_name, "name")
+
+    async def test_set_group_name_result_masks_sensitive_error(self) -> None:
+        bot = SimpleNamespace(api=FakeBotApi(set_group_name_error="token=secret leaked"))
+        service = BotApiService(FakePermissionService(None, bot))
+
+        result = await service.set_group_name_result("10001", "stable-name")
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.error, "set_group_name failed")
 
     async def test_is_bot_ready_returns_true_when_login_info_succeeds(self) -> None:
         bot = SimpleNamespace(api=FakeBotApi())

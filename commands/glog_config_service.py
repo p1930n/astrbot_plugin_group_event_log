@@ -3,10 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 try:
-    from astrbot.api.event import AstrMessageEvent, MessageEventResult
+    from astrbot.api.event import MessageEventResult
 except ImportError:
-    AstrMessageEvent = Any  # type: ignore[misc,assignment]
-
     class MessageEventResult:
         def __init__(self) -> None:
             self.message_text = ""
@@ -16,6 +14,7 @@ except ImportError:
             return self
 
 try:
+    from .command_context import CommandContext
     from .glog_command_constants import (
         ALL_PUSH_ACTIONS,
         ALL_SWITCH_VALUES,
@@ -28,6 +27,7 @@ try:
     from ..services.message_recall_service import MessageRecallService
     from ..domain.models import PushGroupConfig
 except ImportError:
+    from commands.command_context import CommandContext
     from commands.glog_command_constants import (
         ALL_PUSH_ACTIONS,
         ALL_SWITCH_VALUES,
@@ -72,11 +72,11 @@ class GlogConfigService:
         return self._message(HELP_TEXT)
 
     async def handle_status(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         config = self._runtime_state.config
-        current_group_id = self._group_context_service.current_group_id(event)
-        is_global_admin = self._permissions.is_global_admin(event)
+        current_group_id = self._group_context_service.current_group_id(context)
+        is_global_admin = self._group_context_service.is_global_admin(context)
         target_group_id = current_group_id
 
         if args:
@@ -132,10 +132,10 @@ class GlogConfigService:
         return self._message("\n".join(lines))
 
     async def handle_list(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         del args
-        if not self._permissions.is_global_admin(event):
+        if not self._group_context_service.is_global_admin(context):
             return self._message("global admin permission required")
 
         config = self._runtime_state.config
@@ -161,9 +161,9 @@ class GlogConfigService:
         return self._message("\n".join(lines))
 
     async def handle_plugin(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        if not self._permissions.is_global_admin(event):
+        if not self._group_context_service.is_global_admin(context):
             return self._message("global admin permission required")
         if len(args) != 1 or args[0].lower() not in ALL_SWITCH_VALUES:
             return self._message("usage: /glog plugin on|off")
@@ -174,12 +174,12 @@ class GlogConfigService:
         return self._message(f"plugin_enabled set to {config.plugin_enabled}")
 
     async def handle_enable(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         target_group_id = (
             args[0].strip()
             if args
-            else self._group_context_service.current_group_id(event)
+            else self._group_context_service.current_group_id(context)
         )
         if not target_group_id:
             return self._message(
@@ -187,7 +187,7 @@ class GlogConfigService:
             )
 
         if not await self._group_context_service.can_manage_source_group(
-            event,
+            context,
             target_group_id,
         ):
             return self._message("no permission to enable this group")
@@ -205,12 +205,12 @@ class GlogConfigService:
         )
 
     async def handle_disable(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         target_group_id = (
             args[0].strip()
             if args
-            else self._group_context_service.current_group_id(event)
+            else self._group_context_service.current_group_id(context)
         )
         if not target_group_id:
             return self._message(
@@ -218,7 +218,7 @@ class GlogConfigService:
             )
 
         if not await self._group_context_service.can_manage_source_group(
-            event,
+            context,
             target_group_id,
         ):
             return self._message("no permission to disable this group")
@@ -237,9 +237,9 @@ class GlogConfigService:
         )
 
     async def handle_push(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        if not self._permissions.is_global_admin(event):
+        if not self._group_context_service.is_global_admin(context):
             return self._message("global admin permission required")
         if len(args) < 2 or args[0].lower() not in ALL_PUSH_ACTIONS:
             return self._message(
@@ -265,17 +265,17 @@ class GlogConfigService:
         )
 
     async def handle_bind(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         source_group_id, push_group_id, error = self._group_context_service.resolve_bind_args(
-            event,
+            context,
             args,
         )
         if error:
             return self._message(error)
 
         if not await self._group_context_service.can_manage_source_group(
-            event,
+            context,
             source_group_id,
         ):
             return self._message("no permission to manage this source group")
@@ -296,17 +296,17 @@ class GlogConfigService:
         return self._message(f"bound source {source_group_id} -> push {push_group_id}")
 
     async def handle_unbind(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         source_group_id, push_group_id, error = self._group_context_service.resolve_bind_args(
-            event,
+            context,
             args,
         )
         if error:
             return self._message(error)
 
         if not await self._group_context_service.can_manage_source_group(
-            event,
+            context,
             source_group_id,
         ):
             return self._message("no permission to manage this source group")
@@ -323,7 +323,7 @@ class GlogConfigService:
         return self._message(f"unbound source {source_group_id} -> push {push_group_id}")
 
     async def handle_recall(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         if len(args) < 1:
             return self._message("usage: /glog recall on|off [group_id]")
@@ -335,13 +335,13 @@ class GlogConfigService:
         target_group_id = (
             args[1].strip()
             if len(args) >= 2
-            else self._group_context_service.current_group_id(event)
+            else self._group_context_service.current_group_id(context)
         )
         if not target_group_id:
             return self._message("run this command in a group or pass group_id explicitly")
 
         if not await self._group_context_service.can_manage_source_group(
-            event,
+            context,
             target_group_id,
         ):
             return self._message("no permission to manage this source group")
@@ -361,9 +361,9 @@ class GlogConfigService:
         )
 
     async def handle_avatar_interval(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        if not self._permissions.is_global_admin(event):
+        if not self._group_context_service.is_global_admin(context):
             return self._message("global admin permission required")
         if len(args) != 1:
             return self._message("usage: /glog avatar interval <seconds>")
@@ -380,9 +380,9 @@ class GlogConfigService:
         )
 
     async def handle_member_interval(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        if not self._permissions.is_global_admin(event):
+        if not self._group_context_service.is_global_admin(context):
             return self._message("global admin permission required")
         if len(args) != 1:
             return self._message("usage: /glog member interval <seconds>")
@@ -400,7 +400,7 @@ class GlogConfigService:
         )
 
     async def handle_member_poll(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         if len(args) < 1:
             return self._message("usage: /glog member poll on|off [group_id]")
@@ -412,13 +412,13 @@ class GlogConfigService:
         target_group_id = (
             args[1].strip()
             if len(args) >= 2
-            else self._group_context_service.current_group_id(event)
+            else self._group_context_service.current_group_id(context)
         )
         if not target_group_id:
             return self._message("run this command in a group or pass group_id explicitly")
 
         if not await self._group_context_service.can_manage_source_group(
-            event,
+            context,
             target_group_id,
         ):
             return self._message("no permission to manage this source group")

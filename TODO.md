@@ -1,6 +1,6 @@
 # 待办事项与技术债演进计划 (TODO / ARCHITECTURE)
 
-更新日期: 2026-04-10
+更新日期: 2026-04-28
 
 ## 当前实施进度
 
@@ -48,9 +48,10 @@
 - [x] 优先级 1：去回调化与主入口反向依赖清理。已移除 `main.py` 传入子服务的 `lambda` 与私有方法 callback，改为显式运行时状态、配置存取与群操作服务编排。
 - [x] 优先级 1：SQLite 数据层原生异步化。已引入 `aiosqlite`，并将 `ConfigPersistence` / `SQLiteStateRepository` 的数据库 I/O 改为原生 async 接口，移除数据库路径上的 `asyncio.to_thread + sqlite3` 组合。
 - [x] 优先级 1：保留并验证 SQLite 的 WAL、`busy_timeout`、初始化迁移与目录迁移语义。异步化后已保持 `WAL` / `busy_timeout` 配置、旧 JSON / 旧 SQLite 迁移链路与运行时目录迁移语义，并补充并发初始化回归测试。
+- [x] 优先级 1：热重载后台任务生命周期硬化。`main.py` 已登记初始化任务，补齐 `terminate()` 主动置停、取消、等待并清理后台任务集合，降低重载后旧实例延迟轮询风险。
 - [x] 优先级 2：头像回滚兼容性与诊断增强。已补充 `set_group_portrait` 的多候选输入尝试链路，覆盖原始本地路径、规范化本地路径与 `file:///` URI，并在真实群头像变更回滚场景下完成运行验收。
 - [x] 优先级 2：补强头像回滚链路日志上下文。已区分基线路径缺失、路径不可读 / 已失效、API 调用失败、回滚后哈希校验失败四类原因，并将诊断信息写入命令输出、推送日志与持久化状态。
-- [ ] 优先级 3：强化 `BotApiService` 防腐边界，继续收口 OneBot / NapCat 私有 payload 与参数差异，优先补齐标准化返回结构、错误语义和内部 typed DTO，避免宿主协议细节向业务服务扩散。
+- [x] 优先级 3：强化 `BotApiService` 防腐边界。已新增 typed Bot API result，并在保留旧 public 方法兼容的前提下，为群信息、成员列表、群名设置与群头像设置补齐标准化结果和脱敏错误语义。
 - [ ] 优先级 4：轻量模型校验增强。优先在现有 `dataclass` 结构上补齐配置边界校验、坏数据兜底和字段归一化；仅当配置复杂度继续明显上升时，再单独评估 `pydantic` 等新增依赖。
 - [ ] 延后项：内部 Event Bus / Pub-Sub。当前显式依赖注入仍然可追踪，暂不引入事件总线掩盖调用链；仅在后续出现明确的跨服务广播场景或构造依赖失控时再单独立项。
 
@@ -62,3 +63,27 @@
 - `BotApiService` 新增适配能力后，业务服务不再继续散落宿主专属参数结构或错误分支。
 - 配置与状态模型在遇到缺字段、脏字段或历史损坏数据时，不得导致插件初始化主流程崩溃。
 - 在 AstrBot 控制台重复热重载后，不得出现僵尸轮询任务重复执行；旧实例必须稳定失活，新实例必须独占运行时令牌。
+
+## 阶段 12：AstrBot 边界与运行时中枢降耦
+
+目标：
+- 将 AstrBot 框架对象限制在入口 / 适配层，命令层与业务层优先接收原生 context / result。
+- 收口 OneBot / NapCat 平台 API 差异，减少 `dict[str, object]`、`Any` 与裸 `bot.api.call_action` 向业务服务扩散。
+- 拆薄 `GroupRuntimeService`，避免其继续聚合命令展示、轮询编排、锁内业务和状态路径输出。
+
+并行执行边界：
+- [x] 子任务 A：命令层脱水。已引入 `CommandContext`，`GlogCommandHandler` 在入口层脱水 AstrBot event，命令子处理器、配置命令、事件开关命令、群命令与群上下文解析改为接收原生命令上下文；权限判断和 avatar probe 仍通过 `source_event` 过渡到官方 API。
+- [x] 子任务 B：平台 API 防腐。已新增 `platforms/bot_api_results.py` typed result，并为群信息、成员列表、群名设置、群头像设置提供兼容旧 public 方法的 result-returning API。
+- [x] 子任务 C：运行时中枢瘦身。已新增 `runtime/group_runtime_summary.py`，把 avatar/member 检查与状态展示行从 `GroupRuntimeService` 提取到 runtime summary helper，外部方法签名保持不变。
+
+集成规则：
+- 三个子任务不得回滚 `main.py` 的生命周期修复与 `test_main_lifecycle.py`。
+- 若某子任务必须触碰其他子任务写入范围，先停下并汇报冲突点，不自行跨界重构。
+- 集成顺序优先为命令层脱水、平台 API 防腐、运行时中枢瘦身；若出现接口冲突，以能保持现有 65 个单元测试通过的最小改动为准。
+
+验收标准：
+- `main.py` 仍只承担装配、AstrBot 事件入口、标准响应回装与生命周期释放。
+- 命令服务不再直接依赖 AstrBot 事件对象和响应对象，或仅保留明确标注的最外层 adapter。
+- 平台 API 适配层返回明确 typed result，业务服务不继续新增裸 `bot.api.call_action` 或无结构 `dict[str, object]` 分支。
+- `GroupRuntimeService` 的职责收敛为运行时编排，不再承载大段命令展示文案。
+- 完整插件单元测试保持通过；若 Ruff 不可用，需明确记录环境缺失。

@@ -5,12 +5,14 @@ from typing import TYPE_CHECKING, Any
 try:
     from astrbot.api.event import AstrMessageEvent
 
+    from ..commands.command_context import CommandContext
     from ..domain.member_profile import normalize_sender_profile
     from ..services.message_recall_service import MessageRecallService
     from ..domain.models import PluginConfig, SourceGroupConfig
 except ImportError:
     AstrMessageEvent = Any
 
+    from commands.command_context import CommandContext
     from domain.member_profile import normalize_sender_profile
     from services.message_recall_service import MessageRecallService
     from domain.models import SourceGroupConfig
@@ -42,7 +44,8 @@ class PassiveMessageHandler:
         self._group_runtime_service = group_runtime_service
 
     async def handle_group_message(self, event: AstrMessageEvent) -> None:
-        group_id = self._group_context_service.current_group_id(event)
+        context = CommandContext.from_event(event)
+        group_id = self._group_context_service.current_group_id(context)
         if not group_id:
             return
 

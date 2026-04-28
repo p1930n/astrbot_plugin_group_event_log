@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 try:
-    from astrbot.api.event import AstrMessageEvent, MessageEventResult
+    from astrbot.api.event import MessageEventResult
 except ImportError:
-    AstrMessageEvent = Any  # type: ignore[misc,assignment]
-
     class MessageEventResult:
         def __init__(self) -> None:
             self.message_text = ""
@@ -16,6 +14,7 @@ except ImportError:
             return self
 
 try:
+    from .command_context import CommandContext
     from .glog_command_constants import (
         ALL_ROLLBACK_TARGETS,
         ALL_SWITCH_VALUES,
@@ -24,6 +23,7 @@ try:
     )
     from ..domain.models import SourceGroupConfig
 except ImportError:
+    from commands.command_context import CommandContext
     from commands.glog_command_constants import (
         ALL_ROLLBACK_TARGETS,
         ALL_SWITCH_VALUES,
@@ -55,47 +55,50 @@ class GlogGroupService:
         self._group_runtime_service = group_runtime_service
 
     async def handle_avatar_probe(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        group_id, error = await self._resolve_query_group_id(event, args)
+        group_id, error = await self._resolve_query_group_id(context, args)
         if error:
             return self._message(error)
-        return await self._group_runtime_service.handle_avatar_probe(event, group_id)
+        return await self._group_runtime_service.handle_avatar_probe(
+            context.source_event,
+            group_id,
+        )
 
     async def handle_avatar_check(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        group_id, error = await self._resolve_query_group_id(event, args)
+        group_id, error = await self._resolve_query_group_id(context, args)
         if error:
             return self._message(error)
         return await self._group_runtime_service.handle_avatar_check(group_id)
 
     async def handle_avatar_status(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        group_id, error = await self._resolve_query_group_id(event, args)
+        group_id, error = await self._resolve_query_group_id(context, args)
         if error:
             return self._message(error)
         return await self._group_runtime_service.handle_avatar_status(group_id)
 
     async def handle_member_check(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        group_id, error = await self._resolve_query_group_id(event, args)
+        group_id, error = await self._resolve_query_group_id(context, args)
         if error:
             return self._message(error)
         return await self._group_runtime_service.handle_member_check(group_id)
 
     async def handle_member_status(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        group_id, error = await self._resolve_query_group_id(event, args)
+        group_id, error = await self._resolve_query_group_id(context, args)
         if error:
             return self._message(error)
         return await self._group_runtime_service.handle_member_status(group_id)
 
     async def handle_rollback(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         if len(args) < 2 or args[0].lower() not in ALL_ROLLBACK_TARGETS:
             return self._message(
@@ -111,13 +114,13 @@ class GlogGroupService:
         target_group_id = (
             args[2].strip()
             if len(args) >= 3
-            else self._group_context_service.current_group_id(event)
+            else self._group_context_service.current_group_id(context)
         )
         if not target_group_id:
             return self._message("run this command in a group or pass group_id explicitly")
 
         if not await self._group_context_service.can_manage_source_group(
-            event,
+            context,
             target_group_id,
         ):
             return self._message("no permission to manage this source group")
@@ -140,16 +143,19 @@ class GlogGroupService:
         )
 
     async def _resolve_query_group_id(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> tuple[str, str]:
         group_id = (
             args[0].strip()
             if args
-            else self._group_context_service.current_group_id(event)
+            else self._group_context_service.current_group_id(context)
         )
         if not group_id:
             return "", "run this command in a group or pass group_id explicitly"
-        if not await self._group_context_service.can_query_group_metadata(event, group_id):
+        if not await self._group_context_service.can_query_group_metadata(
+            context,
+            group_id,
+        ):
             return "", "no permission to inspect this group"
         return group_id, ""
 
