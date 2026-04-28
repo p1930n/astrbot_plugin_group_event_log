@@ -4,6 +4,7 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 
 ## [Unreleased]
 ### Changed
+- **Hot-Reload Lifecycle**: Registered the initialization task with the plugin background-task tracker and added `terminate()` cleanup to stop runtime loops, cancel pending tasks, await shutdown, and log non-cancellation task failures.
 - **Optimization Roadmap**: Consolidated the latest architecture conclusions into `TODO.md`, defining Phase 11 around state-path stability, native async SQLite migration, avatar rollback diagnostics, Bot API anti-corruption hardening, and deferring internal Event Bus work.
 - **AstrBot Compliance Roadmap**: Updated Phase 11 in `TODO.md` to prioritize AstrBot root data-directory migration, callback removal from service orchestration, and hot-reload task lifecycle guarantees before deeper persistence and adapter refactors.
 - **Runtime Data Root**: Moved plugin runtime state to AstrBot root `data/astrbot_plugin_group_event_log`, added compatibility migration for legacy plugin-local SQLite / probe / baseline files, and updated status output paths to point at the new runtime store.
@@ -25,6 +26,7 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 - **Group Context Extraction**: Added `group_context_service.py` to encapsulate current-group resolution, bind-argument parsing, and source-group permission checks from `main.py`.
 
 ### Added
+- **Lifecycle Test Coverage**: Added `test_main_lifecycle.py` to verify plugin termination cancels registered background tasks and clears runtime task state without requiring a real AstrBot runtime.
 - **Bot Self-Operation Event Switches**: Added per-source-group switches for bot kick, bot mute / unmute, bot recall-own-message, and bot recall-other-message notice logs, configurable through `/glog event ...`.
 - **WebUI Default Event Policy**: Added `_conf_schema.json` defaults for new groups so WebUI can control the initial bot self-operation event switch policy while existing groups remain isolated through persisted group config.
 - **Test Coverage**: Added integration test suites: `test_persistence.py`, `test_services.py`, `test_avatar_guard_service.py`, `test_member_profile_service.py`, `test_polling_scheduler.py`, `test_glog_command_handler.py`, and `test_avatar_hash.py`.

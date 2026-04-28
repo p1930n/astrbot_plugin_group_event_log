@@ -130,7 +130,7 @@ class GroupEventLogPlugin(star.Star):
             self._glog_group_service,
         )
         self._background_tasks: Set[asyncio.Task] = set()
-        asyncio.create_task(self._initialize())
+        self._register_task(asyncio.create_task(self._initialize()))
 
     async def _initialize(self) -> None:
         try:
@@ -146,6 +146,8 @@ class GroupEventLogPlugin(star.Star):
                 len(self._runtime_state.config.monitored_groups),
                 len(self._runtime_state.config.push_groups),
             )
+        except asyncio.CancelledError:
+            raise
         except Exception as exc:
             logger.error("[GroupEventLog] init failed: %s", exc, exc_info=True)
 
@@ -153,6 +155,29 @@ class GroupEventLogPlugin(star.Star):
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
         return task
+
+    async def terminate(self) -> None:
+        self._runtime_state.is_running = False
+        pending_tasks = [
+            task
+            for task in tuple(self._background_tasks)
+            if not task.done()
+        ]
+        for task in pending_tasks:
+            task.cancel()
+        if pending_tasks:
+            results = await asyncio.gather(*pending_tasks, return_exceptions=True)
+            for result in results:
+                if isinstance(result, BaseException) and not isinstance(
+                    result,
+                    asyncio.CancelledError,
+                ):
+                    logger.error(
+                        "[GroupEventLog] background task shutdown failed: %s",
+                        result,
+                        exc_info=result,
+                    )
+        self._background_tasks.clear()
 
     def _build_default_event_switches(self, config: Any | None) -> dict[str, bool]:
         return {
