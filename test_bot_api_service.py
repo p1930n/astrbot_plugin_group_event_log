@@ -62,6 +62,7 @@ class BotApiServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(result.success)
         self.assertEqual(result.failure_reason, AvatarRollbackFailureReason.PATH_UNREADABLE)
         self.assertIn("not found", result.error)
+        self.assertNotIn(missing_path, result.error)
 
     async def test_rollback_group_avatar_tracks_applied_input(self) -> None:
         baseline_path = self.workspace_root / "success" / "baseline.png"
@@ -78,6 +79,22 @@ class BotApiServiceTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn(str(baseline_path), result.attempted_inputs)
         self.assertIn(accepted_file, result.attempted_inputs)
 
+    async def test_set_group_portrait_result_tracks_attempts(self) -> None:
+        baseline_path = self.workspace_root / "typed" / "baseline.png"
+        baseline_path.parent.mkdir(parents=True, exist_ok=True)
+        baseline_path.write_bytes(b"baseline")
+        accepted_file = baseline_path.as_uri()
+        api = FakeBotApi(accepted_file=accepted_file)
+        service = BotApiService(FakePermissionService(FakeBot(api)))
+        candidates, error = service._build_group_portrait_candidates(str(baseline_path))
+
+        result = await service.set_group_portrait_result("10001", candidates)
+
+        self.assertEqual(error, "")
+        self.assertTrue(result.ok)
+        self.assertEqual(result.applied_input, accepted_file)
+        self.assertIn(str(baseline_path), result.attempted_inputs)
+
     async def test_rollback_group_avatar_reports_api_rejected(self) -> None:
         baseline_path = self.workspace_root / "rejected" / "baseline.png"
         baseline_path.parent.mkdir(parents=True, exist_ok=True)
@@ -88,7 +105,8 @@ class BotApiServiceTests(unittest.IsolatedAsyncioTestCase):
 
         self.assertFalse(result.success)
         self.assertEqual(result.failure_reason, AvatarRollbackFailureReason.API_REJECTED)
-        self.assertIn("rejected:", result.error)
+        self.assertEqual(result.error, "set_group_portrait failed")
+        self.assertNotIn(str(baseline_path), result.error)
 
     def _reset_workspace(self) -> None:
         if self.workspace_root.exists():

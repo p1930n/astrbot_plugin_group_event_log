@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 try:
-    from astrbot.api.event import AstrMessageEvent, MessageEventResult
+    from astrbot.api.event import MessageEventResult
 except ImportError:
-    AstrMessageEvent = Any  # type: ignore[misc,assignment]
-
     class MessageEventResult:
         def __init__(self) -> None:
             self.message_text = ""
@@ -16,6 +14,7 @@ except ImportError:
             return self
 
 try:
+    from .command_context import CommandContext
     from .glog_command_constants import (
         ALL_SWITCH_VALUES,
         EVENT_SWITCH_ALIASES,
@@ -24,6 +23,7 @@ try:
     )
     from ..domain.models import SourceGroupConfig
 except ImportError:
+    from commands.command_context import CommandContext
     from commands.glog_command_constants import (
         ALL_SWITCH_VALUES,
         EVENT_SWITCH_ALIASES,
@@ -57,7 +57,7 @@ class GlogEventSwitchService:
         self._default_event_switches = default_event_switches or {}
 
     async def handle_event(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
         if not args:
             return self._message(
@@ -66,7 +66,7 @@ class GlogEventSwitchService:
             )
 
         if args[0].lower() == "status":
-            return await self._handle_status(event, args[1:])
+            return await self._handle_status(context, args[1:])
 
         if len(args) < 2:
             return self._message(
@@ -81,12 +81,12 @@ class GlogEventSwitchService:
         if switch_value not in ALL_SWITCH_VALUES:
             return self._message("event switch must be on or off")
 
-        target_group_id = self._target_group_id(event, args[2:])
+        target_group_id = self._target_group_id(context, args[2:])
         if not target_group_id:
             return self._message("run this command in a group or pass group_id explicitly")
 
         source_config, error = await self._load_manageable_source_config(
-            event,
+            context,
             target_group_id,
         )
         if error:
@@ -101,14 +101,14 @@ class GlogEventSwitchService:
         )
 
     async def _handle_status(
-        self, event: AstrMessageEvent, args: list[str]
+        self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        target_group_id = self._target_group_id(event, args)
+        target_group_id = self._target_group_id(context, args)
         if not target_group_id:
             return self._message("run this command in a group or pass group_id explicitly")
 
         source_config, error = await self._load_manageable_source_config(
-            event,
+            context,
             target_group_id,
         )
         if error:
@@ -125,11 +125,11 @@ class GlogEventSwitchService:
 
     async def _load_manageable_source_config(
         self,
-        event: AstrMessageEvent,
+        context: CommandContext,
         target_group_id: str,
     ) -> tuple[SourceGroupConfig | None, str]:
         if not await self._group_context_service.can_manage_source_group(
-            event,
+            context,
             target_group_id,
         ):
             return None, "no permission to manage this source group"
@@ -163,11 +163,11 @@ class GlogEventSwitchService:
             for event_key in sorted(SELF_OPERATION_EVENT_SWITCHES)
         )
 
-    def _target_group_id(self, event: AstrMessageEvent, args: list[str]) -> str:
+    def _target_group_id(self, context: CommandContext, args: list[str]) -> str:
         return (
             args[0].strip()
             if args
-            else self._group_context_service.current_group_id(event)
+            else self._group_context_service.current_group_id(context)
         )
 
     def _message(self, text: str) -> MessageEventResult:

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Awaitable, Callable, Protocol
+from typing import Awaitable, Callable, Protocol
 
 try:
-    from astrbot.api.event import AstrMessageEvent, MessageEventResult
+    from astrbot.api.event import MessageEventResult
 except ImportError:
-    AstrMessageEvent = Any  # type: ignore[misc,assignment]
-
     class MessageEventResult:
         def __init__(self) -> None:
             self.message_text = ""
@@ -16,6 +14,7 @@ except ImportError:
             return self
 
 try:
+    from .command_context import CommandContext
     from .glog_command_constants import (
         ALL_AVATAR_ACTIONS,
         ALL_MEMBER_ACTIONS,
@@ -26,6 +25,7 @@ try:
     from .glog_event_service import GlogEventSwitchService
     from .glog_group_service import GlogGroupService
 except ImportError:
+    from commands.command_context import CommandContext
     from commands.glog_command_constants import (
         ALL_AVATAR_ACTIONS,
         ALL_MEMBER_ACTIONS,
@@ -38,7 +38,7 @@ except ImportError:
 
 
 class SubCommandHandler(Protocol):
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
         ...
 
 
@@ -46,8 +46,8 @@ class HelpCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        del event
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        del context
         del args
         return self._config_service.build_help_result()
 
@@ -56,88 +56,88 @@ class StatusCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_status(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_status(context, args)
 
 
 class ListCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_list(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_list(context, args)
 
 
 class PluginCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_plugin(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_plugin(context, args)
 
 
 class EnableCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_enable(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_enable(context, args)
 
 
 class DisableCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_disable(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_disable(context, args)
 
 
 class PushCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_push(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_push(context, args)
 
 
 class BindCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_bind(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_bind(context, args)
 
 
 class UnbindCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_unbind(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_unbind(context, args)
 
 
 class RecallCommandHandler:
     def __init__(self, config_service: GlogConfigService) -> None:
         self._config_service = config_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._config_service.handle_recall(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._config_service.handle_recall(context, args)
 
 
 class EventCommandHandler:
     def __init__(self, event_switch_service: GlogEventSwitchService) -> None:
         self._event_switch_service = event_switch_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._event_switch_service.handle_event(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._event_switch_service.handle_event(context, args)
 
 
 class RollbackCommandHandler:
     def __init__(self, group_service: GlogGroupService) -> None:
         self._group_service = group_service
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
-        return await self._group_service.handle_rollback(event, args)
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
+        return await self._group_service.handle_rollback(context, args)
 
 
 class AvatarCommandHandler:
@@ -148,7 +148,7 @@ class AvatarCommandHandler:
     ) -> None:
         self._action_registry: dict[
             str,
-            Callable[[AstrMessageEvent, list[str]], Awaitable[MessageEventResult]],
+            Callable[[CommandContext, list[str]], Awaitable[MessageEventResult]],
         ] = {
             AvatarAction.PROBE: group_service.handle_avatar_probe,
             AvatarAction.CHECK: group_service.handle_avatar_check,
@@ -156,7 +156,7 @@ class AvatarCommandHandler:
             AvatarAction.INTERVAL: config_service.handle_avatar_interval,
         }
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
         if not args or args[0].lower() not in ALL_AVATAR_ACTIONS:
             return self._message(
                 "usage: /glog avatar probe [group_id]\n"
@@ -166,7 +166,7 @@ class AvatarCommandHandler:
             )
 
         action = args[0].lower()
-        return await self._action_registry[action](event, args[1:])
+        return await self._action_registry[action](context, args[1:])
 
     def _message(self, text: str) -> MessageEventResult:
         return MessageEventResult().message(text)
@@ -180,7 +180,7 @@ class MemberCommandHandler:
     ) -> None:
         self._action_registry: dict[
             str,
-            Callable[[AstrMessageEvent, list[str]], Awaitable[MessageEventResult]],
+            Callable[[CommandContext, list[str]], Awaitable[MessageEventResult]],
         ] = {
             MemberAction.CHECK: group_service.handle_member_check,
             MemberAction.STATUS: group_service.handle_member_status,
@@ -188,7 +188,7 @@ class MemberCommandHandler:
             MemberAction.INTERVAL: config_service.handle_member_interval,
         }
 
-    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
+    async def handle(self, context: CommandContext, args: list[str]) -> MessageEventResult:
         if not args or args[0].lower() not in ALL_MEMBER_ACTIONS:
             return self._message(
                 "usage: /glog member check [group_id]\n"
@@ -198,7 +198,7 @@ class MemberCommandHandler:
             )
 
         action = args[0].lower()
-        return await self._action_registry[action](event, args[1:])
+        return await self._action_registry[action](context, args[1:])
 
     def _message(self, text: str) -> MessageEventResult:
         return MessageEventResult().message(text)

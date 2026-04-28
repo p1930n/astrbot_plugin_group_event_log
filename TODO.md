@@ -51,7 +51,7 @@
 - [x] 优先级 1：热重载后台任务生命周期硬化。`main.py` 已登记初始化任务，补齐 `terminate()` 主动置停、取消、等待并清理后台任务集合，降低重载后旧实例延迟轮询风险。
 - [x] 优先级 2：头像回滚兼容性与诊断增强。已补充 `set_group_portrait` 的多候选输入尝试链路，覆盖原始本地路径、规范化本地路径与 `file:///` URI，并在真实群头像变更回滚场景下完成运行验收。
 - [x] 优先级 2：补强头像回滚链路日志上下文。已区分基线路径缺失、路径不可读 / 已失效、API 调用失败、回滚后哈希校验失败四类原因，并将诊断信息写入命令输出、推送日志与持久化状态。
-- [ ] 优先级 3：强化 `BotApiService` 防腐边界，继续收口 OneBot / NapCat 私有 payload 与参数差异，优先补齐标准化返回结构、错误语义和内部 typed DTO，避免宿主协议细节向业务服务扩散。
+- [x] 优先级 3：强化 `BotApiService` 防腐边界。已新增 typed Bot API result，并在保留旧 public 方法兼容的前提下，为群信息、成员列表、群名设置与群头像设置补齐标准化结果和脱敏错误语义。
 - [ ] 优先级 4：轻量模型校验增强。优先在现有 `dataclass` 结构上补齐配置边界校验、坏数据兜底和字段归一化；仅当配置复杂度继续明显上升时，再单独评估 `pydantic` 等新增依赖。
 - [ ] 延后项：内部 Event Bus / Pub-Sub。当前显式依赖注入仍然可追踪，暂不引入事件总线掩盖调用链；仅在后续出现明确的跨服务广播场景或构造依赖失控时再单独立项。
 
@@ -72,9 +72,9 @@
 - 拆薄 `GroupRuntimeService`，避免其继续聚合命令展示、轮询编排、锁内业务和状态路径输出。
 
 并行执行边界：
-- [ ] 子任务 A：命令层脱水。写入范围限制在 `commands/` 与命令相关测试；引入原生 `CommandContext` / `CommandResult`，逐步移除命令服务中的 `AstrMessageEvent` / `MessageEventResult` 直接依赖。
-- [ ] 子任务 B：平台 API 防腐。写入范围限制在 `platforms/`、`services/bot_api_service.py` 与 Bot API 相关测试；优先为群信息、成员列表、群名设置、头像回滚补 typed result，降低宿主协议细节泄漏。
-- [ ] 子任务 C：运行时中枢瘦身。写入范围限制在 `runtime/`、必要的新展示 / summary 模块与 runtime 相关测试；把命令展示文案和状态路径展示从 `GroupRuntimeService` 拆出，保留运行时编排职责。
+- [x] 子任务 A：命令层脱水。已引入 `CommandContext`，`GlogCommandHandler` 在入口层脱水 AstrBot event，命令子处理器、配置命令、事件开关命令、群命令与群上下文解析改为接收原生命令上下文；权限判断和 avatar probe 仍通过 `source_event` 过渡到官方 API。
+- [x] 子任务 B：平台 API 防腐。已新增 `platforms/bot_api_results.py` typed result，并为群信息、成员列表、群名设置、群头像设置提供兼容旧 public 方法的 result-returning API。
+- [x] 子任务 C：运行时中枢瘦身。已新增 `runtime/group_runtime_summary.py`，把 avatar/member 检查与状态展示行从 `GroupRuntimeService` 提取到 runtime summary helper，外部方法签名保持不变。
 
 集成规则：
 - 三个子任务不得回滚 `main.py` 的生命周期修复与 `test_main_lifecycle.py`。

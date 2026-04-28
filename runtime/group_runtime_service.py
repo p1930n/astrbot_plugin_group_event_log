@@ -17,28 +17,32 @@ except ImportError:
 
 try:
     from ..domain.avatar_guard_models import AvatarHashStatus
-    from ..domain.avatar_hash import (
-        AvatarHashTransition,
-        summarize_avatar_hash_state,
-        summarize_avatar_hash_transition,
-    )
-    from ..domain.avatar_probe import build_avatar_probe_record, summarize_avatar_probe
-    from ..domain.group_name_guard import summarize_group_name_guard
-    from ..domain.member_profile import MemberProfileChange, summarize_member_profile_state
+    from ..domain.avatar_hash import AvatarHashTransition
+    from ..domain.avatar_probe import build_avatar_probe_record
+    from ..domain.member_profile import MemberProfileChange
     from ..domain.models import SourceGroupConfig
     from ..domain.notice_adapter import GroupNoticeEvent
+    from .group_runtime_summary import (
+        build_avatar_check_summary,
+        build_avatar_probe_summary,
+        build_avatar_status_summary,
+        build_member_check_summary,
+        build_member_status_summary,
+    )
 except ImportError:
     from domain.avatar_guard_models import AvatarHashStatus
-    from domain.avatar_hash import (
-        AvatarHashTransition,
-        summarize_avatar_hash_state,
-        summarize_avatar_hash_transition,
-    )
-    from domain.avatar_probe import build_avatar_probe_record, summarize_avatar_probe
-    from domain.group_name_guard import summarize_group_name_guard
-    from domain.member_profile import MemberProfileChange, summarize_member_profile_state
+    from domain.avatar_hash import AvatarHashTransition
+    from domain.avatar_probe import build_avatar_probe_record
+    from domain.member_profile import MemberProfileChange
     from domain.models import SourceGroupConfig
     from domain.notice_adapter import GroupNoticeEvent
+    from runtime.group_runtime_summary import (
+        build_avatar_check_summary,
+        build_avatar_probe_summary,
+        build_avatar_status_summary,
+        build_member_check_summary,
+        build_member_status_summary,
+    )
 
 if TYPE_CHECKING:
     try:
@@ -141,9 +145,9 @@ class GroupRuntimeService:
         record = build_avatar_probe_record(group_id, group_info, group_info_ex)
         saved_path = await self._persistence.save_avatar_probe(group_id, record)
 
-        lines = summarize_avatar_probe(record)
-        lines.append(f"saved_to: {saved_path}")
-        return MessageEventResult().message("\n".join(lines))
+        return MessageEventResult().message(
+            "\n".join(build_avatar_probe_summary(record, saved_path))
+        )
 
     async def handle_avatar_check(self, group_id: str) -> MessageEventResult:
         transition, sent_push_groups = await self._check_group_avatar(
@@ -151,37 +155,32 @@ class GroupRuntimeService:
             trigger="manual",
             emit_logs=True,
         )
-        lines = summarize_avatar_hash_transition(transition, sent_push_groups)
-        lines.append(f"state_db_path: {self._persistence.database_path}")
-        lines.append(f"state_record_key: avatar_hash_states/{group_id}")
-        return MessageEventResult().message("\n".join(lines))
+        return MessageEventResult().message(
+            "\n".join(
+                build_avatar_check_summary(
+                    transition,
+                    sent_push_groups,
+                    self._persistence.database_path,
+                )
+            )
+        )
 
     async def handle_avatar_status(self, group_id: str) -> MessageEventResult:
         state = await self._persistence.load_avatar_hash_state(group_id)
         record = await self._persistence.load_avatar_probe(group_id)
         group_name_state = await self._persistence.load_group_name_guard(group_id)
-        if not state and not record and not group_name_state:
-            return MessageEventResult().message(
-                f"no avatar or group-name data found for group {group_id}"
+        return MessageEventResult().message(
+            "\n".join(
+                build_avatar_status_summary(
+                    group_id,
+                    state,
+                    record,
+                    group_name_state,
+                    self._persistence.database_path,
+                    self._persistence.avatar_probe_path(group_id),
+                )
             )
-
-        lines: list[str] = []
-        if state:
-            lines.extend(summarize_avatar_hash_state(state))
-            lines.append(f"hash_state_db_path: {self._persistence.database_path}")
-            lines.append(f"hash_state_record_key: avatar_hash_states/{group_id}")
-        if group_name_state:
-            if lines:
-                lines.append("----")
-            lines.extend(summarize_group_name_guard(group_name_state))
-            lines.append(f"group_name_state_db_path: {self._persistence.database_path}")
-            lines.append(f"group_name_state_record_key: group_name_guard_states/{group_id}")
-        if record:
-            if lines:
-                lines.append("----")
-            lines.extend(summarize_avatar_probe(record))
-            lines.append(f"probe_snapshot_path: {self._persistence.avatar_probe_path(group_id)}")
-        return MessageEventResult().message("\n".join(lines))
+        )
 
     async def handle_member_check(self, group_id: str) -> MessageEventResult:
         state, changes, push_group_ids = await self._check_group_member_profiles(
@@ -189,24 +188,29 @@ class GroupRuntimeService:
             detection_mode="manual_snapshot",
             emit_logs=True,
         )
-        lines = summarize_member_profile_state(state)
-        lines.append(f"detected_changes: {len(changes)}")
-        lines.append("logs_sent_to: " + (", ".join(push_group_ids) if push_group_ids else "-"))
-        lines.append(f"member_profile_state_db_path: {self._persistence.database_path}")
-        lines.append(f"member_profile_state_record_key: member_profile_states/{group_id}")
-        return MessageEventResult().message("\n".join(lines))
+        return MessageEventResult().message(
+            "\n".join(
+                build_member_check_summary(
+                    group_id,
+                    state,
+                    changes,
+                    push_group_ids,
+                    self._persistence.database_path,
+                )
+            )
+        )
 
     async def handle_member_status(self, group_id: str) -> MessageEventResult:
         state = await self._persistence.load_member_profile_state(group_id)
-        if not state:
-            return MessageEventResult().message(
-                f"no member profile snapshot found for group {group_id}"
+        return MessageEventResult().message(
+            "\n".join(
+                build_member_status_summary(
+                    group_id,
+                    state,
+                    self._persistence.database_path,
+                )
             )
-
-        lines = summarize_member_profile_state(state)
-        lines.append(f"member_profile_state_db_path: {self._persistence.database_path}")
-        lines.append(f"member_profile_state_record_key: member_profile_states/{group_id}")
-        return MessageEventResult().message("\n".join(lines))
+        )
 
     async def set_avatar_rollback(
         self,
