@@ -62,6 +62,8 @@ class NoticeEventHandler:
             return
         if not source_config.event_switches.get(notice.event_key, False):
             return
+        if not self._self_operation_notice_enabled(source_config, notice):
+            return
 
         push_group_ids = self._group_runtime_service.resolve_enabled_push_targets(source_config)
         if notice.event_key == "group_recall":
@@ -77,3 +79,29 @@ class NoticeEventHandler:
             await self._log_dispatcher.dispatch_notice_logs(event, notice, push_group_ids)
         if notice.event_key == "notify.group_name" and source_config.group_name_rollback_enabled:
             await self._group_runtime_service.handle_group_name_rollback(notice, push_group_ids)
+
+    def _self_operation_notice_enabled(
+        self,
+        source_config: SourceGroupConfig,
+        notice: GroupNoticeEvent,
+    ) -> bool:
+        switch_key = self._self_operation_switch_key(notice)
+        if not switch_key:
+            return True
+        return source_config.event_switches.get(switch_key, True)
+
+    def _self_operation_switch_key(self, notice: GroupNoticeEvent) -> str:
+        self_id = notice.self_id.strip()
+        if not self_id or notice.operator_id != self_id:
+            return ""
+
+        if notice.event_key == "group_decrease" and notice.sub_type == "kick":
+            return "bot_kick_member"
+        if notice.event_key == "group_ban":
+            return "bot_ban_member"
+        if notice.event_key == "group_recall":
+            if notice.user_id == self_id:
+                return "bot_recall_own_message"
+            if notice.user_id:
+                return "bot_recall_other_message"
+        return ""

@@ -1,0 +1,22 @@
+{
+  "default_bot_kick_member_enabled": {
+    "description": "新启用群默认监听机器人踢人事件",
+    "type": "bool",
+    "default": true
+  },
+  "default_bot_ban_member_enabled": {
+    "description": "新启用群默认监听机器人禁言和解除禁言事件",
+    "type": "bool",
+    "default": true
+  },
+  "default_bot_recall_own_message_enabled": {
+    "description": "新启用群默认监听机器人撤回自己消息事件",
+    "type": "bool",
+    "default": true
+  },
+  "default_bot_recall_other_message_enabled": {
+    "description": "新启用群默认监听机器人撤回别人消息事件",
+    "type": "bool",
+    "default": true
+  }
+}

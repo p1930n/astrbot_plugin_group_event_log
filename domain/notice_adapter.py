@@ -24,6 +24,7 @@ class GroupNoticeEvent:
     group_id: str
     user_id: str = ""
     operator_id: str = ""
+    self_id: str = ""
     details: dict[str, str] = field(default_factory=dict)
     summary: str = ""
 
@@ -49,6 +50,7 @@ def parse_group_notice(payload: dict[str, Any] | None) -> GroupNoticeEvent | Non
 
     user_id = _to_text(payload.get("user_id"))
     operator_id = _to_text(payload.get("operator_id"))
+    self_id = _to_text(payload.get("self_id"))
     details = _extract_details(event_key, payload)
     details["time_raw"] = _to_text(payload.get("time"))
     summary = _build_summary(event_key, sub_type, details)
@@ -60,6 +62,7 @@ def parse_group_notice(payload: dict[str, Any] | None) -> GroupNoticeEvent | Non
         group_id=group_id,
         user_id=user_id,
         operator_id=operator_id,
+        self_id=self_id,
         details=details,
         summary=summary,
     )

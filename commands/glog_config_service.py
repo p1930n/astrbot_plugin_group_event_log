@@ -24,8 +24,9 @@ try:
         PushAction,
         SwitchValue,
     )
+    from .glog_event_service import GlogEventSwitchService
     from ..services.message_recall_service import MessageRecallService
-    from ..domain.models import PluginConfig, PushGroupConfig, SourceGroupConfig
+    from ..domain.models import PushGroupConfig
 except ImportError:
     from commands.glog_command_constants import (
         ALL_PUSH_ACTIONS,
@@ -35,8 +36,9 @@ except ImportError:
         PushAction,
         SwitchValue,
     )
+    from commands.glog_event_service import GlogEventSwitchService
     from services.message_recall_service import MessageRecallService
-    from domain.models import PluginConfig, PushGroupConfig, SourceGroupConfig
+    from domain.models import PushGroupConfig
 
 if TYPE_CHECKING:
     try:
@@ -57,12 +59,14 @@ class GlogConfigService:
         runtime_config_store: "RuntimeConfigStore",
         group_context_service: "GroupContextService",
         message_recall_service: MessageRecallService,
+        event_switch_service: GlogEventSwitchService,
     ) -> None:
         self._permissions = permissions
         self._runtime_state = runtime_state
         self._runtime_config_store = runtime_config_store
         self._group_context_service = group_context_service
         self._message_recall_service = message_recall_service
+        self._event_switch_service = event_switch_service
 
     def build_help_result(self) -> MessageEventResult:
         return self._message(HELP_TEXT)
@@ -119,6 +123,9 @@ class GlogConfigService:
                 lines.append(
                     f"target_group_recall_message_enabled: {monitored.recall_message_enabled}"
                 )
+                lines.extend(
+                    self._event_switch_service.format_self_operation_switches(monitored)
+                )
         elif current_group_id:
             lines.append(f"current_group_id: {current_group_id}")
 
@@ -138,7 +145,9 @@ class GlogConfigService:
             f"[avatar_rb={'on' if group_config.avatar_rollback_enabled else 'off'} "
             f"name_rb={'on' if group_config.group_name_rollback_enabled else 'off'} "
             f"member_poll={'on' if group_config.member_profile_polling_enabled else 'off'} "
-            f"recall_msg={'on' if group_config.recall_message_enabled else 'off'}]"
+            f"recall_msg={'on' if group_config.recall_message_enabled else 'off'} "
+            "self_ops="
+            f"{self._event_switch_service.format_self_operation_switch_summary(group_config)}]"
             for group_id, group_config in sorted(config.monitored_groups.items())
         ]
         push_lines = [
@@ -186,7 +195,7 @@ class GlogConfigService:
         config = self._runtime_state.config
         source_config = config.monitored_groups.get(target_group_id)
         if not source_config:
-            source_config = SourceGroupConfig()
+            source_config = self._event_switch_service.new_source_group_config()
             config.monitored_groups[target_group_id] = source_config
         source_config.enabled = True
         await self._runtime_config_store.save()
@@ -217,7 +226,7 @@ class GlogConfigService:
         config = self._runtime_state.config
         source_config = config.monitored_groups.get(target_group_id)
         if not source_config:
-            source_config = SourceGroupConfig(enabled=False)
+            source_config = self._event_switch_service.new_source_group_config(enabled=False)
             config.monitored_groups[target_group_id] = source_config
         else:
             source_config.enabled = False

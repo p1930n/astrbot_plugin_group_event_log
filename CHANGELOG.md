@@ -12,6 +12,7 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 - **Avatar Rollback Diagnostics**: Expanded `set_group_portrait` rollback input candidates, classified rollback failures into path-missing / unreadable-path / API-rejected / verify-failed cases, and surfaced applied-input plus attempted-input diagnostics in command output, persisted state, and dispatched logs.
 
 ### Refactored
+- **Glog Event Switch Layer**: Extracted bot self-operation event switch command handling into `glog_event_service.py`, keeping `glog_config_service.py` focused on general plugin and group configuration commands.
 - **State Persistence**: Migrated high-frequency runtime state (avatar hash, group name guard, member profiles) from scattered JSON writes to SQLite.
 - **Service Domain Extraction**: Extracted `BotApiService`, `LogDispatchService`, `GroupNameGuardService`, `AvatarGuardService`, and `MemberProfileService` from `main.py` to eliminate God Object patterns.
 - **Glog Command Layer**: Refactored command dispatch, splitting config and group logic (`glog_config_service`, `glog_group_service`, `glog_command_handler`).
@@ -24,4 +25,6 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 - **Group Context Extraction**: Added `group_context_service.py` to encapsulate current-group resolution, bind-argument parsing, and source-group permission checks from `main.py`.
 
 ### Added
+- **Bot Self-Operation Event Switches**: Added per-source-group switches for bot kick, bot mute / unmute, bot recall-own-message, and bot recall-other-message notice logs, configurable through `/glog event ...`.
+- **WebUI Default Event Policy**: Added `_conf_schema.json` defaults for new groups so WebUI can control the initial bot self-operation event switch policy while existing groups remain isolated through persisted group config.
 - **Test Coverage**: Added integration test suites: `test_persistence.py`, `test_services.py`, `test_avatar_guard_service.py`, `test_member_profile_service.py`, `test_polling_scheduler.py`, `test_glog_command_handler.py`, and `test_avatar_hash.py`.

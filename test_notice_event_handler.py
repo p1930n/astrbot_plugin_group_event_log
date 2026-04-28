@@ -127,3 +127,92 @@ class NoticeEventHandlerTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(log_dispatcher.notice_calls[0]["push_group_ids"], ["30001"])
         self.assertEqual(len(recall_service.calls), 0)
         self.assertEqual(group_runtime_service.rollback_calls, [("10001", ["30001"])])
+
+    async def test_bot_kick_switch_off_suppresses_notice_log(self) -> None:
+        source_config = SourceGroupConfig(enabled=True, push_group_ids=["30001"])
+        source_config.event_switches["bot_kick_member"] = False
+        runtime_state = PluginRuntimeState(
+            config=PluginConfig(
+                monitored_groups={"10001": source_config},
+                push_groups={"30001": PushGroupConfig(enabled=True)},
+            )
+        )
+        log_dispatcher = FakeLogDispatcher()
+        handler = NoticeEventHandler(
+            runtime_state,
+            log_dispatcher,
+            FakeMessageRecallService(),
+            FakeGroupRuntimeService(),
+        )
+        payload = {
+            "post_type": "notice",
+            "notice_type": "group_decrease",
+            "sub_type": "kick",
+            "group_id": "10001",
+            "user_id": "20001",
+            "operator_id": "90001",
+            "self_id": "90001",
+        }
+
+        await handler.handle_raw_notice(object(), payload)
+
+        self.assertEqual(log_dispatcher.notice_calls, [])
+
+    async def test_bot_recall_other_switch_off_suppresses_recall_service(self) -> None:
+        source_config = SourceGroupConfig(enabled=True, push_group_ids=["30001"])
+        source_config.event_switches["bot_recall_other_message"] = False
+        runtime_state = PluginRuntimeState(
+            config=PluginConfig(
+                monitored_groups={"10001": source_config},
+                push_groups={"30001": PushGroupConfig(enabled=True)},
+            )
+        )
+        recall_service = FakeMessageRecallService()
+        handler = NoticeEventHandler(
+            runtime_state,
+            FakeLogDispatcher(),
+            recall_service,
+            FakeGroupRuntimeService(),
+        )
+        payload = {
+            "post_type": "notice",
+            "notice_type": "group_recall",
+            "group_id": "10001",
+            "user_id": "20001",
+            "operator_id": "90001",
+            "self_id": "90001",
+            "message_id": "50001",
+        }
+
+        await handler.handle_raw_notice(object(), payload)
+
+        self.assertEqual(recall_service.calls, [])
+
+    async def test_self_switch_is_ignored_when_self_id_is_missing(self) -> None:
+        source_config = SourceGroupConfig(enabled=True, push_group_ids=["30001"])
+        source_config.event_switches["bot_kick_member"] = False
+        runtime_state = PluginRuntimeState(
+            config=PluginConfig(
+                monitored_groups={"10001": source_config},
+                push_groups={"30001": PushGroupConfig(enabled=True)},
+            )
+        )
+        log_dispatcher = FakeLogDispatcher()
+        handler = NoticeEventHandler(
+            runtime_state,
+            log_dispatcher,
+            FakeMessageRecallService(),
+            FakeGroupRuntimeService(),
+        )
+        payload = {
+            "post_type": "notice",
+            "notice_type": "group_decrease",
+            "sub_type": "kick",
+            "group_id": "10001",
+            "user_id": "20001",
+            "operator_id": "90001",
+        }
+
+        await handler.handle_raw_notice(object(), payload)
+
+        self.assertEqual(len(log_dispatcher.notice_calls), 1)

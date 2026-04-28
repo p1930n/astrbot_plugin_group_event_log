@@ -21,12 +21,14 @@ except ImportError:
 try:
     from .glog_command_constants import GlogSubCommand
     from .glog_config_service import GlogConfigService
+    from .glog_event_service import GlogEventSwitchService
     from .glog_group_service import GlogGroupService
     from .glog_sub_commands import (
         AvatarCommandHandler,
         BindCommandHandler,
         DisableCommandHandler,
         EnableCommandHandler,
+        EventCommandHandler,
         HelpCommandHandler,
         ListCommandHandler,
         MemberCommandHandler,
@@ -40,12 +42,14 @@ try:
 except ImportError:
     from commands.glog_command_constants import GlogSubCommand
     from commands.glog_config_service import GlogConfigService
+    from commands.glog_event_service import GlogEventSwitchService
     from commands.glog_group_service import GlogGroupService
     from commands.glog_sub_commands import (
         AvatarCommandHandler,
         BindCommandHandler,
         DisableCommandHandler,
         EnableCommandHandler,
+        EventCommandHandler,
         HelpCommandHandler,
         ListCommandHandler,
         MemberCommandHandler,
@@ -62,6 +66,7 @@ class GlogCommandHandler:
     def __init__(
         self,
         config_service: GlogConfigService,
+        event_switch_service: GlogEventSwitchService,
         group_service: GlogGroupService,
     ) -> None:
         self._help_handler = HelpCommandHandler(config_service)
@@ -77,6 +82,7 @@ class GlogCommandHandler:
             GlogSubCommand.UNBIND: UnbindCommandHandler(config_service),
             GlogSubCommand.ROLLBACK: RollbackCommandHandler(group_service),
             GlogSubCommand.RECALL: RecallCommandHandler(config_service),
+            GlogSubCommand.EVENT: EventCommandHandler(event_switch_service),
             GlogSubCommand.AVATAR: AvatarCommandHandler(config_service, group_service),
             GlogSubCommand.MEMBER: MemberCommandHandler(config_service, group_service),
         }

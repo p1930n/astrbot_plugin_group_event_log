@@ -16,6 +16,7 @@ class GlogSubCommand:
     UNBIND = "unbind"
     ROLLBACK = "rollback"
     RECALL = "recall"
+    EVENT = "event"
     AVATAR = "avatar"
     MEMBER = "member"
 
@@ -65,6 +66,28 @@ ALL_MEMBER_ACTIONS = {
 }
 ALL_ROLLBACK_TARGETS = {RollbackTarget.AVATAR, RollbackTarget.GROUP_NAME}
 
+EVENT_SWITCH_ALIASES = {
+    "bot_kick_member": "bot_kick_member",
+    "kick": "bot_kick_member",
+    "bot-kick": "bot_kick_member",
+    "bot_ban_member": "bot_ban_member",
+    "ban": "bot_ban_member",
+    "bot-ban": "bot_ban_member",
+    "bot_recall_own_message": "bot_recall_own_message",
+    "recall-own": "bot_recall_own_message",
+    "recall_own": "bot_recall_own_message",
+    "bot_recall_other_message": "bot_recall_other_message",
+    "recall-other": "bot_recall_other_message",
+    "recall_other": "bot_recall_other_message",
+}
+
+SELF_OPERATION_EVENT_SWITCHES = {
+    "bot_kick_member",
+    "bot_ban_member",
+    "bot_recall_own_message",
+    "bot_recall_other_message",
+}
+
 
 HELP_TEXT = "\n".join(
     [
@@ -79,6 +102,8 @@ HELP_TEXT = "\n".join(
         "/glog rollback avatar on|off [group_id] - toggle avatar rollback",
         "/glog rollback group_name on|off [group_id] - toggle group name rollback",
         "/glog recall on|off [group_id] - toggle recalled message content",
+        "/glog event <kick|ban|recall-own|recall-other> on|off [group_id] - toggle bot self-operation logs",
+        "/glog event status [group_id] - show bot self-operation log switches",
         "/glog avatar probe [group_id] - probe avatar-related fields",
         "/glog avatar check [group_id] - run avatar hash detection now",
         "/glog avatar interval <seconds> - set avatar hash poll interval",

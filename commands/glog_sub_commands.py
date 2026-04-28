@@ -23,6 +23,7 @@ try:
         MemberAction,
     )
     from .glog_config_service import GlogConfigService
+    from .glog_event_service import GlogEventSwitchService
     from .glog_group_service import GlogGroupService
 except ImportError:
     from commands.glog_command_constants import (
@@ -32,6 +33,7 @@ except ImportError:
         MemberAction,
     )
     from commands.glog_config_service import GlogConfigService
+    from commands.glog_event_service import GlogEventSwitchService
     from commands.glog_group_service import GlogGroupService
 
 
@@ -120,6 +122,14 @@ class RecallCommandHandler:
 
     async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
         return await self._config_service.handle_recall(event, args)
+
+
+class EventCommandHandler:
+    def __init__(self, event_switch_service: GlogEventSwitchService) -> None:
+        self._event_switch_service = event_switch_service
+
+    async def handle(self, event: AstrMessageEvent, args: list[str]) -> MessageEventResult:
+        return await self._event_switch_service.handle_event(event, args)
 
 
 class RollbackCommandHandler:
