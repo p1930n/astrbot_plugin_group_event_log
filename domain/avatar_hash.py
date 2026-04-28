@@ -10,7 +10,7 @@ from typing import Any
 try:
     from .avatar_guard_models import AvatarHashStatus
 except ImportError:
-    from avatar_guard_models import AvatarHashStatus
+    from domain.avatar_guard_models import AvatarHashStatus
 
 
 AVATAR_FETCH_USER_AGENT = "AstrBot-GroupEventLog/1.0"

@@ -10,26 +10,26 @@ import astrbot.api.star as star
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
-from .avatar_guard_service import AvatarGuardService
-from .bot_api_service import BotApiService
-from .glog_command_handler import GlogCommandHandler
-from .glog_config_service import GlogConfigService
-from .glog_group_service import GlogGroupService
-from .group_context_service import GroupContextService
-from .group_name_guard_service import GroupNameGuardService
-from .group_runtime_service import GroupRuntimeService
-from .group_task_coordinator import GroupTaskCoordinator
-from .log_dispatch_service import LogDispatchService
-from .message_recall_service import MessageRecallService
-from .member_profile_service import MemberProfileService
-from .notice_event_handler import NoticeEventHandler
-from .passive_message_handler import PassiveMessageHandler
-from .permissions import PermissionService
-from .plugin_runtime_state import PluginRuntimeState
-from .polling_scheduler import PollingSchedulerService
-from .persistence import ConfigPersistence
-from .runtime_config_store import RuntimeConfigStore
-from .runtime_session_service import RuntimeSessionService
+from .services.avatar_guard_service import AvatarGuardService
+from .services.bot_api_service import BotApiService
+from .commands.glog_command_handler import GlogCommandHandler
+from .commands.glog_config_service import GlogConfigService
+from .commands.glog_group_service import GlogGroupService
+from .commands.group_context_service import GroupContextService
+from .services.group_name_guard_service import GroupNameGuardService
+from .runtime.group_runtime_service import GroupRuntimeService
+from .runtime.group_task_coordinator import GroupTaskCoordinator
+from .services.log_dispatch_service import LogDispatchService
+from .services.message_recall_service import MessageRecallService
+from .services.member_profile_service import MemberProfileService
+from .runtime.notice_event_handler import NoticeEventHandler
+from .runtime.passive_message_handler import PassiveMessageHandler
+from .platforms.permissions import PermissionService
+from .runtime.plugin_runtime_state import PluginRuntimeState
+from .runtime.polling_scheduler import PollingSchedulerService
+from .storage.persistence import ConfigPersistence
+from .runtime.runtime_config_store import RuntimeConfigStore
+from .runtime.runtime_session_service import RuntimeSessionService
 
 
 @star.register(

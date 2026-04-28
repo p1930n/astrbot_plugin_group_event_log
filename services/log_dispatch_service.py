@@ -12,31 +12,31 @@ except ImportError:
     AstrMessageEvent = Any
 
 try:
-    from .avatar_hash import AvatarHashTransition
-    from .bot_api_service import BotApiService
-    from .log_formatter import (
+    from ..domain.avatar_hash import AvatarHashTransition
+    from ..services.bot_api_service import BotApiService
+    from ..formatting.log_formatter import (
         format_avatar_hash_log,
         format_group_name_rollback_log,
         format_group_recall_log,
         format_member_profile_change_log,
         format_notice_log,
     )
-    from .member_profile import MemberProfileChange
-    from .message_cache import CachedGroupMessage
-    from .notice_adapter import GroupNoticeEvent
+    from ..domain.member_profile import MemberProfileChange
+    from ..domain.message_cache import CachedGroupMessage
+    from ..domain.notice_adapter import GroupNoticeEvent
 except ImportError:
-    from avatar_hash import AvatarHashTransition
-    from bot_api_service import BotApiService
-    from log_formatter import (
+    from domain.avatar_hash import AvatarHashTransition
+    from services.bot_api_service import BotApiService
+    from formatting.log_formatter import (
         format_avatar_hash_log,
         format_group_name_rollback_log,
         format_group_recall_log,
         format_member_profile_change_log,
         format_notice_log,
     )
-    from member_profile import MemberProfileChange
-    from message_cache import CachedGroupMessage
-    from notice_adapter import GroupNoticeEvent
+    from domain.member_profile import MemberProfileChange
+    from domain.message_cache import CachedGroupMessage
+    from domain.notice_adapter import GroupNoticeEvent
 
 
 class LogDispatchService:

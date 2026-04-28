@@ -1,9 +1,9 @@
 import unittest
 from types import SimpleNamespace
 
-from models import PluginConfig, PushGroupConfig, SourceGroupConfig
-from passive_message_handler import PassiveMessageHandler
-from plugin_runtime_state import PluginRuntimeState
+from domain.models import PluginConfig, PushGroupConfig, SourceGroupConfig
+from runtime.passive_message_handler import PassiveMessageHandler
+from runtime.plugin_runtime_state import PluginRuntimeState
 
 
 class FakeMessageRecallService:

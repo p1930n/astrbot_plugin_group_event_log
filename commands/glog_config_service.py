@@ -24,10 +24,10 @@ try:
         PushAction,
         SwitchValue,
     )
-    from .message_recall_service import MessageRecallService
-    from .models import PluginConfig, PushGroupConfig, SourceGroupConfig
+    from ..services.message_recall_service import MessageRecallService
+    from ..domain.models import PluginConfig, PushGroupConfig, SourceGroupConfig
 except ImportError:
-    from glog_command_constants import (
+    from commands.glog_command_constants import (
         ALL_PUSH_ACTIONS,
         ALL_SWITCH_VALUES,
         HELP_TEXT,
@@ -35,18 +35,18 @@ except ImportError:
         PushAction,
         SwitchValue,
     )
-    from message_recall_service import MessageRecallService
-    from models import PluginConfig, PushGroupConfig, SourceGroupConfig
+    from services.message_recall_service import MessageRecallService
+    from domain.models import PluginConfig, PushGroupConfig, SourceGroupConfig
 
 if TYPE_CHECKING:
     try:
-        from .group_context_service import GroupContextService
-        from .plugin_runtime_state import PluginRuntimeState
-        from .runtime_config_store import RuntimeConfigStore
+        from ..commands.group_context_service import GroupContextService
+        from ..runtime.plugin_runtime_state import PluginRuntimeState
+        from ..runtime.runtime_config_store import RuntimeConfigStore
     except ImportError:
-        from group_context_service import GroupContextService
-        from plugin_runtime_state import PluginRuntimeState
-        from runtime_config_store import RuntimeConfigStore
+        from commands.group_context_service import GroupContextService
+        from runtime.plugin_runtime_state import PluginRuntimeState
+        from runtime.runtime_config_store import RuntimeConfigStore
 
 
 class GlogConfigService:

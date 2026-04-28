@@ -1,14 +1,14 @@
 import unittest
 
-from avatar_guard_models import (
+from domain.avatar_guard_models import (
     AvatarHashStatus,
     AvatarRollbackExecution,
     AvatarRollbackFailureReason,
     AvatarVerifyRetryPolicy,
 )
-from avatar_guard_service import AvatarGuardService
-from avatar_hash import AvatarHashFetchResult
-from models import SourceGroupConfig
+from services.avatar_guard_service import AvatarGuardService
+from domain.avatar_hash import AvatarHashFetchResult
+from domain.models import SourceGroupConfig
 
 
 class FakeAvatarPersistence:

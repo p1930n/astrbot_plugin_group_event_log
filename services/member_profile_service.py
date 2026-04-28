@@ -4,14 +4,14 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 try:
-    from .member_profile import (
+    from ..domain.member_profile import (
         MemberProfileChange,
         apply_passive_member_profile,
         apply_polled_member_profiles,
         normalize_member_list_payload,
     )
 except ImportError:
-    from member_profile import (
+    from domain.member_profile import (
         MemberProfileChange,
         apply_passive_member_profile,
         apply_polled_member_profiles,
@@ -20,11 +20,11 @@ except ImportError:
 
 if TYPE_CHECKING:
     try:
-        from .bot_api_service import BotApiService
-        from .log_dispatch_service import LogDispatchService
+        from ..services.bot_api_service import BotApiService
+        from ..services.log_dispatch_service import LogDispatchService
     except ImportError:
-        from bot_api_service import BotApiService
-        from log_dispatch_service import LogDispatchService
+        from services.bot_api_service import BotApiService
+        from services.log_dispatch_service import LogDispatchService
 
 
 class MemberProfileService:

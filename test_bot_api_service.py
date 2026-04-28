@@ -2,8 +2,8 @@ import shutil
 import unittest
 from pathlib import Path
 
-from avatar_guard_models import AvatarRollbackFailureReason
-from bot_api_service import BotApiService
+from domain.avatar_guard_models import AvatarRollbackFailureReason
+from services.bot_api_service import BotApiService
 
 
 class FakePermissionService:

@@ -1,6 +1,6 @@
 import unittest
 
-from group_task_coordinator import GroupTaskCoordinator
+from runtime.group_task_coordinator import GroupTaskCoordinator
 
 
 class GroupTaskCoordinatorTests(unittest.TestCase):

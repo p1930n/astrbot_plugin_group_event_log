@@ -10,19 +10,19 @@ except ImportError:
     logger = logging.getLogger(__name__)
 
 try:
-    from .group_name_guard import build_group_name_baseline_state
-    from .notice_adapter import GroupNoticeEvent
+    from ..domain.group_name_guard import build_group_name_baseline_state
+    from ..domain.notice_adapter import GroupNoticeEvent
 except ImportError:
-    from group_name_guard import build_group_name_baseline_state
-    from notice_adapter import GroupNoticeEvent
+    from domain.group_name_guard import build_group_name_baseline_state
+    from domain.notice_adapter import GroupNoticeEvent
 
 if TYPE_CHECKING:
     try:
-        from .bot_api_service import BotApiService
-        from .log_dispatch_service import LogDispatchService
+        from ..services.bot_api_service import BotApiService
+        from ..services.log_dispatch_service import LogDispatchService
     except ImportError:
-        from bot_api_service import BotApiService
-        from log_dispatch_service import LogDispatchService
+        from services.bot_api_service import BotApiService
+        from services.log_dispatch_service import LogDispatchService
 
 
 class GroupNameGuardService:

@@ -38,10 +38,10 @@ try:
         UnbindCommandHandler,
     )
 except ImportError:
-    from glog_command_constants import GlogSubCommand
-    from glog_config_service import GlogConfigService
-    from glog_group_service import GlogGroupService
-    from glog_sub_commands import (
+    from commands.glog_command_constants import GlogSubCommand
+    from commands.glog_config_service import GlogConfigService
+    from commands.glog_group_service import GlogGroupService
+    from commands.glog_sub_commands import (
         AvatarCommandHandler,
         BindCommandHandler,
         DisableCommandHandler,

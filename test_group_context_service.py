@@ -1,6 +1,6 @@
 import unittest
 
-from group_context_service import GroupContextService
+from commands.group_context_service import GroupContextService
 
 
 class FakeEvent:

@@ -5,25 +5,25 @@ from typing import TYPE_CHECKING, Any
 try:
     from astrbot.api.event import AstrMessageEvent
 
-    from .member_profile import normalize_sender_profile
-    from .message_recall_service import MessageRecallService
-    from .models import PluginConfig, SourceGroupConfig
+    from ..domain.member_profile import normalize_sender_profile
+    from ..services.message_recall_service import MessageRecallService
+    from ..domain.models import PluginConfig, SourceGroupConfig
 except ImportError:
     AstrMessageEvent = Any
 
-    from member_profile import normalize_sender_profile
-    from message_recall_service import MessageRecallService
-    from models import SourceGroupConfig
+    from domain.member_profile import normalize_sender_profile
+    from services.message_recall_service import MessageRecallService
+    from domain.models import SourceGroupConfig
 
 if TYPE_CHECKING:
     try:
-        from .group_context_service import GroupContextService
-        from .group_runtime_service import GroupRuntimeService
-        from .plugin_runtime_state import PluginRuntimeState
+        from ..commands.group_context_service import GroupContextService
+        from ..runtime.group_runtime_service import GroupRuntimeService
+        from ..runtime.plugin_runtime_state import PluginRuntimeState
     except ImportError:
-        from group_context_service import GroupContextService
-        from group_runtime_service import GroupRuntimeService
-        from plugin_runtime_state import PluginRuntimeState
+        from commands.group_context_service import GroupContextService
+        from runtime.group_runtime_service import GroupRuntimeService
+        from runtime.plugin_runtime_state import PluginRuntimeState
 
 
 class PassiveMessageHandler:

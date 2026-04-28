@@ -25,14 +25,14 @@ try:
     from .glog_config_service import GlogConfigService
     from .glog_group_service import GlogGroupService
 except ImportError:
-    from glog_command_constants import (
+    from commands.glog_command_constants import (
         ALL_AVATAR_ACTIONS,
         ALL_MEMBER_ACTIONS,
         AvatarAction,
         MemberAction,
     )
-    from glog_config_service import GlogConfigService
-    from glog_group_service import GlogGroupService
+    from commands.glog_config_service import GlogConfigService
+    from commands.glog_group_service import GlogGroupService
 
 
 class SubCommandHandler(Protocol):

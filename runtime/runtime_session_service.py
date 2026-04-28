@@ -10,11 +10,11 @@ except ImportError:
 
 if TYPE_CHECKING:
     try:
-        from .persistence import ConfigPersistence
-        from .plugin_runtime_state import PluginRuntimeState
+        from ..storage.persistence import ConfigPersistence
+        from ..runtime.plugin_runtime_state import PluginRuntimeState
     except ImportError:
-        from persistence import ConfigPersistence
-        from plugin_runtime_state import PluginRuntimeState
+        from storage.persistence import ConfigPersistence
+        from runtime.plugin_runtime_state import PluginRuntimeState
 
 
 class RuntimeSessionService:
