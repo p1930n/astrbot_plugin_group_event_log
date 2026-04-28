@@ -1,11 +1,11 @@
 import unittest
 from types import SimpleNamespace
 
-from bot_api_service import BotApiService
-from group_name_guard_service import GroupNameGuardService
-from log_dispatch_service import LogDispatchService
-from member_profile import MemberProfileChange
-from notice_adapter import GroupNoticeEvent
+from services.bot_api_service import BotApiService
+from services.group_name_guard_service import GroupNameGuardService
+from services.log_dispatch_service import LogDispatchService
+from domain.member_profile import MemberProfileChange
+from domain.notice_adapter import GroupNoticeEvent
 
 
 class FakePermissionService:

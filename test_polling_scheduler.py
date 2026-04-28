@@ -1,8 +1,8 @@
 import unittest
 
-from models import PluginConfig, SourceGroupConfig
-from plugin_runtime_state import PluginRuntimeState
-from polling_scheduler import BOT_READY_RETRY_SECONDS, PollingSchedulerService
+from domain.models import PluginConfig, SourceGroupConfig
+from runtime.plugin_runtime_state import PluginRuntimeState
+from runtime.polling_scheduler import BOT_READY_RETRY_SECONDS, PollingSchedulerService
 
 
 class FakePollingBotApi:

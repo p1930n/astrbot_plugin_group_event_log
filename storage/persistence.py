@@ -10,7 +10,7 @@ from typing import Any
 try:
     from .sqlite_repository import SQLiteStateRepository
 except ImportError:
-    from sqlite_repository import SQLiteStateRepository
+    from storage.sqlite_repository import SQLiteStateRepository
 
 try:
     from astrbot.api import logger as runtime_logger

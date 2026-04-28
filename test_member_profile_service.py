@@ -1,7 +1,7 @@
 import unittest
 
-from member_profile import build_member_profile_state
-from member_profile_service import MemberProfileService
+from domain.member_profile import build_member_profile_state
+from services.member_profile_service import MemberProfileService
 
 
 class FakeMemberProfilePersistence:

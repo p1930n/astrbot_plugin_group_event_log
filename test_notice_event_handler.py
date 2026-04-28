@@ -1,8 +1,8 @@
 import unittest
 
-from models import PluginConfig, PushGroupConfig, SourceGroupConfig
-from notice_event_handler import NoticeEventHandler
-from plugin_runtime_state import PluginRuntimeState
+from domain.models import PluginConfig, PushGroupConfig, SourceGroupConfig
+from runtime.notice_event_handler import NoticeEventHandler
+from runtime.plugin_runtime_state import PluginRuntimeState
 
 
 class FakeLogDispatcher:

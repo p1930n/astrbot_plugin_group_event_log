@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 try:
-    from .models import PluginConfig
+    from ..domain.models import PluginConfig
 except ImportError:
-    from models import PluginConfig
+    from domain.models import PluginConfig
 
 
 @dataclass(slots=True)

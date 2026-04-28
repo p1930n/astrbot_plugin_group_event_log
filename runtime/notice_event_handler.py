@@ -7,26 +7,26 @@ try:
     from astrbot.api import logger
     from astrbot.api.event import AstrMessageEvent
 
-    from .log_dispatch_service import LogDispatchService
-    from .message_recall_service import MessageRecallService
-    from .models import SourceGroupConfig
-    from .notice_adapter import GroupNoticeEvent, parse_group_notice
+    from ..services.log_dispatch_service import LogDispatchService
+    from ..services.message_recall_service import MessageRecallService
+    from ..domain.models import SourceGroupConfig
+    from ..domain.notice_adapter import GroupNoticeEvent, parse_group_notice
 except ImportError:
     logger = logging.getLogger(__name__)
     AstrMessageEvent = Any
 
-    from log_dispatch_service import LogDispatchService
-    from message_recall_service import MessageRecallService
-    from models import SourceGroupConfig
-    from notice_adapter import GroupNoticeEvent, parse_group_notice
+    from services.log_dispatch_service import LogDispatchService
+    from services.message_recall_service import MessageRecallService
+    from domain.models import SourceGroupConfig
+    from domain.notice_adapter import GroupNoticeEvent, parse_group_notice
 
 if TYPE_CHECKING:
     try:
-        from .group_runtime_service import GroupRuntimeService
-        from .plugin_runtime_state import PluginRuntimeState
+        from ..runtime.group_runtime_service import GroupRuntimeService
+        from ..runtime.plugin_runtime_state import PluginRuntimeState
     except ImportError:
-        from group_runtime_service import GroupRuntimeService
-        from plugin_runtime_state import PluginRuntimeState
+        from runtime.group_runtime_service import GroupRuntimeService
+        from runtime.plugin_runtime_state import PluginRuntimeState
 
 
 class NoticeEventHandler:

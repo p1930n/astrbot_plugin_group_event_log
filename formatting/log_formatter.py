@@ -3,15 +3,15 @@ from __future__ import annotations
 from datetime import datetime
 
 try:
-    from .avatar_hash import AvatarHashTransition
-    from .message_cache import CachedGroupMessage
-    from .member_profile import MemberProfileChange
-    from .notice_adapter import GroupNoticeEvent
+    from ..domain.avatar_hash import AvatarHashTransition
+    from ..domain.message_cache import CachedGroupMessage
+    from ..domain.member_profile import MemberProfileChange
+    from ..domain.notice_adapter import GroupNoticeEvent
 except ImportError:
-    from avatar_hash import AvatarHashTransition
-    from message_cache import CachedGroupMessage
-    from member_profile import MemberProfileChange
-    from notice_adapter import GroupNoticeEvent
+    from domain.avatar_hash import AvatarHashTransition
+    from domain.message_cache import CachedGroupMessage
+    from domain.member_profile import MemberProfileChange
+    from domain.notice_adapter import GroupNoticeEvent
 
 
 def format_notice_log(notice: GroupNoticeEvent, trace_id: str) -> str:
@@ -179,7 +179,6 @@ def format_group_recall_log(
         lines.extend(
             [
                 f"message_sent_at: {_format_time(cached_message.sent_at)}",
-                f"message_text: {_format_inline(cached_message.message_text)}",
                 f"message_content: {_format_inline(cached_message.message_content)}",
             ]
         )
@@ -187,7 +186,6 @@ def format_group_recall_log(
         lines.extend(
             [
                 "message_sent_at: -",
-                "message_text: -",
                 "message_content: cache_miss",
             ]
         )

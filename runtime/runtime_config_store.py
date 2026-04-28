@@ -6,16 +6,16 @@ from typing import TYPE_CHECKING, Callable
 
 if TYPE_CHECKING:
     try:
-        from .persistence import ConfigPersistence
-        from .plugin_runtime_state import PluginRuntimeState
+        from ..storage.persistence import ConfigPersistence
+        from ..runtime.plugin_runtime_state import PluginRuntimeState
     except ImportError:
-        from persistence import ConfigPersistence
-        from plugin_runtime_state import PluginRuntimeState
+        from storage.persistence import ConfigPersistence
+        from runtime.plugin_runtime_state import PluginRuntimeState
 
 try:
-    from .models import PluginConfig
+    from ..domain.models import PluginConfig
 except ImportError:
-    from models import PluginConfig
+    from domain.models import PluginConfig
 
 
 def current_local_time() -> datetime:

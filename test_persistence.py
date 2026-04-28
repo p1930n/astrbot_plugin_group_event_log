@@ -6,8 +6,8 @@ import time
 import unittest
 from pathlib import Path
 
-from persistence import ConfigPersistence, PLUGIN_DATA_DIR_NAME
-from sqlite_repository import SQLiteStateRepository
+from storage.persistence import ConfigPersistence, PLUGIN_DATA_DIR_NAME
+from storage.sqlite_repository import SQLiteStateRepository
 
 
 class ConfigPersistenceMigrationTests(unittest.IsolatedAsyncioTestCase):

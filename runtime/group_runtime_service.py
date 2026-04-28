@@ -16,47 +16,47 @@ except ImportError:
             return self
 
 try:
-    from .avatar_guard_models import AvatarHashStatus
-    from .avatar_hash import (
+    from ..domain.avatar_guard_models import AvatarHashStatus
+    from ..domain.avatar_hash import (
         AvatarHashTransition,
         summarize_avatar_hash_state,
         summarize_avatar_hash_transition,
     )
-    from .avatar_probe import build_avatar_probe_record, summarize_avatar_probe
-    from .group_name_guard import summarize_group_name_guard
-    from .member_profile import MemberProfileChange, summarize_member_profile_state
-    from .models import SourceGroupConfig
-    from .notice_adapter import GroupNoticeEvent
+    from ..domain.avatar_probe import build_avatar_probe_record, summarize_avatar_probe
+    from ..domain.group_name_guard import summarize_group_name_guard
+    from ..domain.member_profile import MemberProfileChange, summarize_member_profile_state
+    from ..domain.models import SourceGroupConfig
+    from ..domain.notice_adapter import GroupNoticeEvent
 except ImportError:
-    from avatar_guard_models import AvatarHashStatus
-    from avatar_hash import (
+    from domain.avatar_guard_models import AvatarHashStatus
+    from domain.avatar_hash import (
         AvatarHashTransition,
         summarize_avatar_hash_state,
         summarize_avatar_hash_transition,
     )
-    from avatar_probe import build_avatar_probe_record, summarize_avatar_probe
-    from group_name_guard import summarize_group_name_guard
-    from member_profile import MemberProfileChange, summarize_member_profile_state
-    from models import SourceGroupConfig
-    from notice_adapter import GroupNoticeEvent
+    from domain.avatar_probe import build_avatar_probe_record, summarize_avatar_probe
+    from domain.group_name_guard import summarize_group_name_guard
+    from domain.member_profile import MemberProfileChange, summarize_member_profile_state
+    from domain.models import SourceGroupConfig
+    from domain.notice_adapter import GroupNoticeEvent
 
 if TYPE_CHECKING:
     try:
-        from .avatar_guard_service import AvatarGuardService
-        from .bot_api_service import BotApiService
-        from .group_name_guard_service import GroupNameGuardService
+        from ..services.avatar_guard_service import AvatarGuardService
+        from ..services.bot_api_service import BotApiService
+        from ..services.group_name_guard_service import GroupNameGuardService
         from .group_task_coordinator import GroupTaskCoordinator
-        from .member_profile_service import MemberProfileService
-        from .persistence import ConfigPersistence
-        from .runtime_config_store import RuntimeConfigStore
+        from ..services.member_profile_service import MemberProfileService
+        from ..storage.persistence import ConfigPersistence
+        from ..runtime.runtime_config_store import RuntimeConfigStore
     except ImportError:
-        from avatar_guard_service import AvatarGuardService
-        from bot_api_service import BotApiService
-        from group_name_guard_service import GroupNameGuardService
-        from group_task_coordinator import GroupTaskCoordinator
-        from member_profile_service import MemberProfileService
-        from persistence import ConfigPersistence
-        from runtime_config_store import RuntimeConfigStore
+        from services.avatar_guard_service import AvatarGuardService
+        from services.bot_api_service import BotApiService
+        from services.group_name_guard_service import GroupNameGuardService
+        from runtime.group_task_coordinator import GroupTaskCoordinator
+        from services.member_profile_service import MemberProfileService
+        from storage.persistence import ConfigPersistence
+        from runtime.runtime_config_store import RuntimeConfigStore
 
 
 class GroupRuntimeService:

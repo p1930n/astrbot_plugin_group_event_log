@@ -1,6 +1,6 @@
 import unittest
 
-from member_profile import (
+from domain.member_profile import (
     apply_passive_member_profile,
     apply_polled_member_profiles,
     build_member_profile_state,

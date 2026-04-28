@@ -22,25 +22,25 @@ try:
         RollbackTarget,
         SwitchValue,
     )
-    from .models import SourceGroupConfig
+    from ..domain.models import SourceGroupConfig
 except ImportError:
-    from glog_command_constants import (
+    from commands.glog_command_constants import (
         ALL_ROLLBACK_TARGETS,
         ALL_SWITCH_VALUES,
         RollbackTarget,
         SwitchValue,
     )
-    from models import SourceGroupConfig
+    from domain.models import SourceGroupConfig
 
 if TYPE_CHECKING:
     try:
-        from .group_context_service import GroupContextService
-        from .group_runtime_service import GroupRuntimeService
-        from .plugin_runtime_state import PluginRuntimeState
+        from ..commands.group_context_service import GroupContextService
+        from ..runtime.group_runtime_service import GroupRuntimeService
+        from ..runtime.plugin_runtime_state import PluginRuntimeState
     except ImportError:
-        from group_context_service import GroupContextService
-        from group_runtime_service import GroupRuntimeService
-        from plugin_runtime_state import PluginRuntimeState
+        from commands.group_context_service import GroupContextService
+        from runtime.group_runtime_service import GroupRuntimeService
+        from runtime.plugin_runtime_state import PluginRuntimeState
 
 
 class GlogGroupService:

@@ -2,7 +2,7 @@ import hashlib
 import unittest
 from unittest.mock import patch
 
-from avatar_hash import fetch_group_avatar_hash
+from domain.avatar_hash import fetch_group_avatar_hash
 
 
 class FakeAvatarHttpResponse:
@@ -60,7 +60,7 @@ class AvatarHashFetchTests(unittest.IsolatedAsyncioTestCase):
             ]
         )
 
-        with patch("avatar_hash._create_avatar_http_session", return_value=fake_session):
+        with patch("domain.avatar_hash._create_avatar_http_session", return_value=fake_session):
             result = await fetch_group_avatar_hash("10001", timeout_seconds=5)
 
         self.assertTrue(result.ok)
@@ -75,7 +75,7 @@ class AvatarHashFetchTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_fetch_group_avatar_hash_returns_error_when_aiohttp_missing(self) -> None:
         with patch(
-            "avatar_hash._create_avatar_http_session",
+            "domain.avatar_hash._create_avatar_http_session",
             side_effect=RuntimeError("aiohttp dependency not installed"),
         ):
             result = await fetch_group_avatar_hash("10001")

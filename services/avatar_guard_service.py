@@ -4,28 +4,28 @@ import asyncio
 from typing import TYPE_CHECKING, Any, Awaitable, Callable
 
 try:
-    from .avatar_guard_models import (
+    from ..domain.avatar_guard_models import (
         DEFAULT_AVATAR_VERIFY_RETRY_POLICY,
         AvatarHashStatus,
         AvatarRollbackFailureReason,
         AvatarRollbackResult,
         AvatarVerifyRetryPolicy,
     )
-    from .avatar_hash import (
+    from ..domain.avatar_hash import (
         AvatarHashFetchResult,
         AvatarHashTransition,
         apply_avatar_hash_result,
         fetch_group_avatar_hash,
     )
 except ImportError:
-    from avatar_guard_models import (
+    from domain.avatar_guard_models import (
         DEFAULT_AVATAR_VERIFY_RETRY_POLICY,
         AvatarHashStatus,
         AvatarRollbackFailureReason,
         AvatarRollbackResult,
         AvatarVerifyRetryPolicy,
     )
-    from avatar_hash import (
+    from domain.avatar_hash import (
         AvatarHashFetchResult,
         AvatarHashTransition,
         apply_avatar_hash_result,
@@ -34,13 +34,13 @@ except ImportError:
 
 if TYPE_CHECKING:
     try:
-        from .bot_api_service import BotApiService
-        from .log_dispatch_service import LogDispatchService
-        from .models import SourceGroupConfig
+        from ..services.bot_api_service import BotApiService
+        from ..services.log_dispatch_service import LogDispatchService
+        from ..domain.models import SourceGroupConfig
     except ImportError:
-        from bot_api_service import BotApiService
-        from log_dispatch_service import LogDispatchService
-        from models import SourceGroupConfig
+        from services.bot_api_service import BotApiService
+        from services.log_dispatch_service import LogDispatchService
+        from domain.models import SourceGroupConfig
 
 
 class AvatarGuardService:

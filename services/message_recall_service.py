@@ -5,15 +5,15 @@ from typing import Any
 try:
     from astrbot.api.event import AstrMessageEvent
 
-    from .log_dispatch_service import LogDispatchService
-    from .message_cache import GroupMessageCache, build_cached_group_message
-    from .notice_adapter import GroupNoticeEvent
+    from ..services.log_dispatch_service import LogDispatchService
+    from ..domain.message_cache import GroupMessageCache, build_cached_group_message
+    from ..domain.notice_adapter import GroupNoticeEvent
 except ImportError:
     AstrMessageEvent = Any
 
-    from log_dispatch_service import LogDispatchService
-    from message_cache import GroupMessageCache, build_cached_group_message
-    from notice_adapter import GroupNoticeEvent
+    from services.log_dispatch_service import LogDispatchService
+    from domain.message_cache import GroupMessageCache, build_cached_group_message
+    from domain.notice_adapter import GroupNoticeEvent
 
 
 class MessageRecallService:

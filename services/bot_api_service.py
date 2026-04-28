@@ -5,19 +5,22 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 try:
-    from .avatar_guard_models import AvatarRollbackExecution, AvatarRollbackFailureReason
+    from ..domain.avatar_guard_models import (
+        AvatarRollbackExecution,
+        AvatarRollbackFailureReason,
+    )
     from astrbot.api import logger
     from astrbot.api.event import AstrMessageEvent
 except ImportError:
-    from avatar_guard_models import AvatarRollbackExecution, AvatarRollbackFailureReason
+    from domain.avatar_guard_models import AvatarRollbackExecution, AvatarRollbackFailureReason
     logger = logging.getLogger(__name__)
     AstrMessageEvent = Any
 
 if TYPE_CHECKING:
     try:
-        from .permissions import PermissionService
+        from ..platforms.permissions import PermissionService
     except ImportError:
-        from permissions import PermissionService
+        from platforms.permissions import PermissionService
 
 
 class BotApiService:

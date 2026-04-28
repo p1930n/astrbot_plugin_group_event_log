@@ -1,12 +1,12 @@
 import unittest
 from unittest.mock import patch
 
-from glog_command_constants import MIN_POLL_INTERVAL_SECONDS
-from glog_command_handler import GlogCommandHandler
-from glog_config_service import GlogConfigService
-from glog_group_service import GlogGroupService
-from models import PluginConfig, PushGroupConfig, SourceGroupConfig
-from plugin_runtime_state import PluginRuntimeState
+from commands.glog_command_constants import MIN_POLL_INTERVAL_SECONDS
+from commands.glog_command_handler import GlogCommandHandler
+from commands.glog_config_service import GlogConfigService
+from commands.glog_group_service import GlogGroupService
+from domain.models import PluginConfig, PushGroupConfig, SourceGroupConfig
+from runtime.plugin_runtime_state import PluginRuntimeState
 
 
 class DummyResult:
@@ -261,7 +261,7 @@ class GlogCommandHandlerTests(unittest.IsolatedAsyncioTestCase):
         harness.group_runtime_service.raise_avatar_check_error = True
         handler = harness.build_handler()
 
-        with patch("glog_command_handler.logger") as logger_mock:
+        with patch("commands.glog_command_handler.logger") as logger_mock:
             result = await handler.handle_glog(
                 FakeEvent("/glog avatar check", group_id="10001")
             )

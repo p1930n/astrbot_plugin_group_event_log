@@ -1,9 +1,9 @@
 import unittest
 from time import time
 
-from message_cache import GroupMessageCache
-from message_recall_service import MessageRecallService
-from notice_adapter import GroupNoticeEvent
+from domain.message_cache import GroupMessageCache
+from services.message_recall_service import MessageRecallService
+from domain.notice_adapter import GroupNoticeEvent
 
 
 class FakeRecallLogDispatcher:

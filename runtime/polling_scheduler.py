@@ -11,15 +11,15 @@ except ImportError:
 
 if TYPE_CHECKING:
     try:
-        from .bot_api_service import BotApiService
-        from .group_runtime_service import GroupRuntimeService
-        from .plugin_runtime_state import PluginRuntimeState
+        from ..services.bot_api_service import BotApiService
+        from ..runtime.group_runtime_service import GroupRuntimeService
+        from ..runtime.plugin_runtime_state import PluginRuntimeState
         from .runtime_session_service import RuntimeSessionService
     except ImportError:
-        from bot_api_service import BotApiService
-        from group_runtime_service import GroupRuntimeService
-        from plugin_runtime_state import PluginRuntimeState
-        from runtime_session_service import RuntimeSessionService
+        from services.bot_api_service import BotApiService
+        from runtime.group_runtime_service import GroupRuntimeService
+        from runtime.plugin_runtime_state import PluginRuntimeState
+        from runtime.runtime_session_service import RuntimeSessionService
 
 
 BOT_READY_RETRY_SECONDS = 5
