@@ -28,8 +28,12 @@ class FakeMessageRecallService:
 
 
 class FakeGroupContextService:
-    def current_group_id(self, event) -> str:
-        return str(event.get_group_id() or "").strip()
+    def __init__(self) -> None:
+        self.contexts: list[object] = []
+
+    def current_group_id(self, context) -> str:
+        self.contexts.append(context)
+        return str(context.group_id or "").strip()
 
 
 class FakeGroupRuntimeService:
@@ -75,13 +79,15 @@ class PassiveMessageHandlerTests(unittest.IsolatedAsyncioTestCase):
         recall_service = FakeMessageRecallService()
         group_runtime_service = FakeGroupRuntimeService()
 
+        group_context_service = FakeGroupContextService()
         handler = PassiveMessageHandler(
             runtime_state,
-            FakeGroupContextService(),
+            group_context_service,
             recall_service,
             group_runtime_service,
         )
         event = SimpleNamespace(
+            get_message_str=lambda: ".cf group add word",
             get_group_id=lambda: "10001",
             get_sender_id=lambda: "20001",
             message_obj=SimpleNamespace(
@@ -99,6 +105,7 @@ class PassiveMessageHandlerTests(unittest.IsolatedAsyncioTestCase):
 
         await handler.handle_group_message(event)
 
+        self.assertEqual(group_context_service.contexts[0].group_id, "10001")
         self.assertEqual(len(recall_service.cache_calls), 1)
         self.assertTrue(recall_service.cache_calls[0]["recall_message_enabled"])
         self.assertEqual(recall_service.cache_calls[0]["fallback_message_str"], "hello world")
@@ -113,13 +120,15 @@ class PassiveMessageHandlerTests(unittest.IsolatedAsyncioTestCase):
         recall_service = FakeMessageRecallService()
         group_runtime_service = FakeGroupRuntimeService()
 
+        group_context_service = FakeGroupContextService()
         handler = PassiveMessageHandler(
             PluginRuntimeState(config=PluginConfig()),
-            FakeGroupContextService(),
+            group_context_service,
             recall_service,
             group_runtime_service,
         )
         event = SimpleNamespace(
+            get_message_str=lambda: ".cf status",
             get_group_id=lambda: "10001",
             get_sender_id=lambda: "20001",
             message_obj=SimpleNamespace(
