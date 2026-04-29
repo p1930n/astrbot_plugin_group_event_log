@@ -7,11 +7,13 @@ from services.member_profile_service import MemberProfileService
 class FakeMemberProfilePersistence:
     def __init__(self) -> None:
         self.member_states: dict[str, dict[str, object]] = {}
+        self.save_calls: list[str] = []
 
     async def load_member_profile_state(self, group_id: str) -> dict[str, object]:
         return dict(self.member_states.get(group_id, {}))
 
     async def save_member_profile_state(self, group_id: str, data: dict[str, object]) -> str:
+        self.save_calls.append(group_id)
         self.member_states[group_id] = dict(data)
         return f"memory://member_profile_states/{group_id}"
 
@@ -77,6 +79,56 @@ class MemberProfileServiceTests(unittest.IsolatedAsyncioTestCase):
         )
         self.assertEqual(len(dispatcher.calls), 1)
         self.assertEqual(dispatcher.calls[0]["push_group_ids"], ["30001"])
+        self.assertEqual(persistence.save_calls, ["10001"])
+
+    async def test_handle_passive_member_profile_skips_save_when_unchanged(self) -> None:
+        persistence = FakeMemberProfilePersistence()
+        persistence.member_states["10001"] = build_member_profile_state("10001")
+        persistence.member_states["10001"]["members"] = {
+            "20001": {
+                "user_id": "20001",
+                "card": "stable-card",
+                "nickname": "tester",
+                "last_seen_at": "2026-04-09T20:00:00",
+            }
+        }
+        persistence.member_states["10001"]["member_count"] = 1
+        bot_api = FakeMemberProfileBotApi({"ok": True, "data": []})
+        dispatcher = FakeMemberProfileLogDispatcher()
+        service = MemberProfileService(persistence, bot_api, dispatcher)
+
+        await service.handle_passive_member_profile(
+            "10001",
+            "20001",
+            "stable-card",
+            "tester",
+            ["30001"],
+        )
+
+        self.assertEqual(persistence.save_calls, [])
+        self.assertEqual(dispatcher.calls, [])
+
+    async def test_handle_passive_member_profile_saves_first_seen_member(self) -> None:
+        persistence = FakeMemberProfilePersistence()
+        persistence.member_states["10001"] = build_member_profile_state("10001")
+        bot_api = FakeMemberProfileBotApi({"ok": True, "data": []})
+        dispatcher = FakeMemberProfileLogDispatcher()
+        service = MemberProfileService(persistence, bot_api, dispatcher)
+
+        await service.handle_passive_member_profile(
+            "10001",
+            "20001",
+            "new-card",
+            "tester",
+            ["30001"],
+        )
+
+        self.assertEqual(
+            persistence.member_states["10001"]["members"]["20001"]["card"],
+            "new-card",
+        )
+        self.assertEqual(persistence.save_calls, ["10001"])
+        self.assertEqual(dispatcher.calls, [])
 
     async def test_check_group_member_profiles_updates_state_and_logs(self) -> None:
         persistence = FakeMemberProfilePersistence()
