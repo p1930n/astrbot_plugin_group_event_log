@@ -83,3 +83,10 @@ class GroupContextServiceTests(unittest.IsolatedAsyncioTestCase):
         )
 
         self.assertEqual((source_group_id, push_group_id, error), ("10001", "30001", ""))
+
+    def test_current_group_id_accepts_legacy_event_without_group_id_attribute(self) -> None:
+        service = GroupContextService(FakePermissionService())
+
+        group_id = service.current_group_id(FakeEvent(group_id="10001"))
+
+        self.assertEqual(group_id, "10001")

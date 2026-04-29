@@ -14,8 +14,20 @@ class GroupContextService:
     def __init__(self, permissions: Any) -> None:
         self._permissions = permissions
 
-    def current_group_id(self, context: CommandContext) -> str:
-        return context.group_id
+    def current_group_id(self, context: CommandContext | Any) -> str:
+        if isinstance(context, CommandContext):
+            return context.group_id
+
+        group_id = getattr(context, "group_id", None)
+        if group_id is None:
+            get_group_id = getattr(context, "get_group_id", None)
+            if not callable(get_group_id):
+                return ""
+            try:
+                group_id = get_group_id()
+            except Exception:
+                return ""
+        return str(group_id or "").strip()
 
     def is_global_admin(self, context: CommandContext) -> bool:
         if not context.source_event:
