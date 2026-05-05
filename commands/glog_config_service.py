@@ -239,8 +239,6 @@ class GlogConfigService:
     async def handle_push(
         self, context: CommandContext, args: list[str]
     ) -> MessageEventResult:
-        if not self._group_context_service.is_global_admin(context):
-            return self._message("global admin permission required")
         if len(args) < 2 or args[0].lower() not in ALL_PUSH_ACTIONS:
             return self._message(
                 "usage: /glog push enable <group_id>\n"
@@ -251,6 +249,17 @@ class GlogConfigService:
         group_id = args[1].strip()
         if not group_id:
             return self._message("push group_id is required")
+
+        if not self._group_context_service.is_global_admin(context):
+            current_group_id = self._group_context_service.current_group_id(context)
+            if (
+                current_group_id != group_id
+                or not await self._group_context_service.can_manage_source_group(
+                    context,
+                    group_id,
+                )
+            ):
+                return self._message("no permission to manage this push group")
 
         config = self._runtime_state.config
         push_group = config.push_groups.get(group_id)
