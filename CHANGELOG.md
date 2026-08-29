@@ -3,6 +3,12 @@
 All notable changes to the `astrbot_plugin_group_event_log` codebase will be documented in this file.
 
 ## [Unreleased]
+
+## [0.9.0] - 2026-08-29
+### Fixed
+- **Push Group Permission Scope**: Scoped `/glog push enable|disable` so group owners and admins can manage the push switch of the group they are currently in, while cross-group push management still requires global admin.
+- **Legacy Group Event Context**: Tolerated legacy group event context shapes when dehydrating passive message data.
+
 ### Changed
 - **Passive Member Profile Writes**: Reduced high-frequency group-message persistence by skipping passive member-profile saves when an existing member's observed card and nickname are unchanged, while still persisting first-seen members and real profile changes.
 - **Command Boundary**: Added a native `CommandContext` command adapter so glog command services receive dehydrated message, group, sender, and platform data instead of directly reading AstrBot events throughout the command layer.

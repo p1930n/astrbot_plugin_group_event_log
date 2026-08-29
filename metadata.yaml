@@ -2,9 +2,9 @@ name: astrbot_plugin_group_event_log
 display_name: Group Event Log
 desc: Group event log plugin for AstrBot with NapCat or OneBot notice routing.
 author: p1930n
-version: 0.8.0
+version: 0.9.0
 help: /glog help
-repo: ""
+repo: "https://github.com/p1930n/astrbot_plugin_group_event_log"
 support_platforms:
   - aiocqhttp
 astrbot_version: ">=4.16,<5"

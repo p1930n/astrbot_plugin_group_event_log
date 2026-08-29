@@ -16,8 +16,8 @@ from .runtime.plugin_runtime_factory import build_plugin_runtime
     "astrbot_plugin_group_event_log",
     "p1930n",
     "Group event log plugin for NapCat or OneBot notice routing.",
-    "0.8.0",
-    "",
+    "0.9.0",
+    "https://github.com/p1930n/astrbot_plugin_group_event_log",
 )
 class GroupEventLogPlugin(star.Star):
     def __init__(self, context: star.Context, config: Any | None = None) -> None:
