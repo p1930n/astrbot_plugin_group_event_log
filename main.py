@@ -1,36 +1,15 @@
 from __future__ import annotations
 
 import asyncio
-import uuid
 from pathlib import Path
-from typing import Any, Set
+from typing import Any
 
 import astrbot.api.event.filter as filter
 import astrbot.api.star as star
 from astrbot.api import logger
 from astrbot.api.event import AstrMessageEvent, MessageEventResult
 
-from .services.avatar_guard_service import AvatarGuardService
-from .services.bot_api_service import BotApiService
-from .commands.glog_command_handler import GlogCommandHandler
-from .commands.glog_config_service import GlogConfigService
-from .commands.glog_event_service import GlogEventSwitchService
-from .commands.glog_group_service import GlogGroupService
-from .commands.group_context_service import GroupContextService
-from .services.group_name_guard_service import GroupNameGuardService
-from .runtime.group_runtime_service import GroupRuntimeService
-from .runtime.group_task_coordinator import GroupTaskCoordinator
-from .services.log_dispatch_service import LogDispatchService
-from .services.message_recall_service import MessageRecallService
-from .services.member_profile_service import MemberProfileService
-from .runtime.notice_event_handler import NoticeEventHandler
-from .runtime.passive_message_handler import PassiveMessageHandler
-from .platforms.permissions import PermissionService
-from .runtime.plugin_runtime_state import PluginRuntimeState
-from .runtime.polling_scheduler import PollingSchedulerService
-from .storage.persistence import ConfigPersistence
-from .runtime.runtime_config_store import RuntimeConfigStore
-from .runtime.runtime_session_service import RuntimeSessionService
+from .runtime.plugin_runtime_factory import build_plugin_runtime
 
 
 @star.register(
@@ -43,93 +22,20 @@ from .runtime.runtime_session_service import RuntimeSessionService
 class GroupEventLogPlugin(star.Star):
     def __init__(self, context: star.Context, config: Any | None = None) -> None:
         super().__init__(context)
-        self._default_event_switches = self._build_default_event_switches(config)
-        self._persistence = ConfigPersistence(
+        runtime = build_plugin_runtime(
+            context,
+            config,
             plugin_dir=Path(__file__).parent,
             runtime_root=Path.cwd(),
         )
-        self._runtime_state = PluginRuntimeState()
-        self._runtime_config_store = RuntimeConfigStore(
-            self._persistence,
-            self._runtime_state,
-        )
-        self._runtime_session_service = RuntimeSessionService(
-            self._persistence,
-            self._runtime_state,
-            runtime_token=uuid.uuid4().hex,
-        )
-        self._permissions = PermissionService(context)
-        self._group_context_service = GroupContextService(self._permissions)
-        self._bot_api = BotApiService(self._permissions)
-        self._log_dispatcher = LogDispatchService(self._bot_api)
-        self._message_recall_service = MessageRecallService(self._log_dispatcher)
-        self._avatar_guard = AvatarGuardService(
-            self._persistence,
-            self._bot_api,
-            self._log_dispatcher,
-        )
-        self._member_profile_service = MemberProfileService(
-            self._persistence,
-            self._bot_api,
-            self._log_dispatcher,
-        )
-        self._group_name_guard = GroupNameGuardService(
-            self._persistence,
-            self._bot_api,
-            self._log_dispatcher,
-        )
-        self._group_runtime_service = GroupRuntimeService(
-            self._runtime_config_store,
-            self._persistence,
-            self._bot_api,
-            self._avatar_guard,
-            self._group_name_guard,
-            self._member_profile_service,
-            GroupTaskCoordinator(),
-        )
-        self._polling_scheduler = PollingSchedulerService(
-            self._bot_api,
-            self._runtime_state,
-            self._runtime_session_service,
-            self._group_runtime_service,
-        )
-        self._passive_message_handler = PassiveMessageHandler(
-            self._runtime_state,
-            self._group_context_service,
-            self._message_recall_service,
-            self._group_runtime_service,
-        )
-        self._notice_event_handler = NoticeEventHandler(
-            self._runtime_state,
-            self._log_dispatcher,
-            self._message_recall_service,
-            self._group_runtime_service,
-        )
-        self._glog_event_switch_service = GlogEventSwitchService(
-            self._runtime_state,
-            self._runtime_config_store,
-            self._group_context_service,
-            default_event_switches=self._default_event_switches,
-        )
-        self._glog_config_service = GlogConfigService(
-            self._permissions,
-            self._runtime_state,
-            self._runtime_config_store,
-            self._group_context_service,
-            self._message_recall_service,
-            self._glog_event_switch_service,
-        )
-        self._glog_group_service = GlogGroupService(
-            self._runtime_state,
-            self._group_context_service,
-            self._group_runtime_service,
-        )
-        self._command_handler = GlogCommandHandler(
-            self._glog_config_service,
-            self._glog_event_switch_service,
-            self._glog_group_service,
-        )
-        self._background_tasks: Set[asyncio.Task] = set()
+        self._runtime_state = runtime.runtime_state
+        self._runtime_config_store = runtime.runtime_config_store
+        self._runtime_session_service = runtime.runtime_session_service
+        self._polling_scheduler = runtime.polling_scheduler
+        self._passive_message_handler = runtime.passive_message_handler
+        self._notice_event_handler = runtime.notice_event_handler
+        self._command_handler = runtime.command_handler
+        self._background_tasks: set[asyncio.Task] = set()
         self._register_task(asyncio.create_task(self._initialize()))
 
     async def _initialize(self) -> None:
@@ -178,40 +84,6 @@ class GroupEventLogPlugin(star.Star):
                         exc_info=result,
                     )
         self._background_tasks.clear()
-
-    def _build_default_event_switches(self, config: Any | None) -> dict[str, bool]:
-        return {
-            "bot_kick_member": self._config_bool(
-                config,
-                "default_bot_kick_member_enabled",
-                True,
-            ),
-            "bot_ban_member": self._config_bool(
-                config,
-                "default_bot_ban_member_enabled",
-                True,
-            ),
-            "bot_recall_own_message": self._config_bool(
-                config,
-                "default_bot_recall_own_message_enabled",
-                True,
-            ),
-            "bot_recall_other_message": self._config_bool(
-                config,
-                "default_bot_recall_other_message_enabled",
-                True,
-            ),
-        }
-
-    def _config_bool(self, config: Any | None, key: str, default: bool) -> bool:
-        if config is None:
-            return default
-        try:
-            if hasattr(config, "get"):
-                return bool(config.get(key, default))
-            return bool(getattr(config, key, default))
-        except Exception:
-            return default
 
     @filter.command("glog")
     async def glog(self, event: AstrMessageEvent):

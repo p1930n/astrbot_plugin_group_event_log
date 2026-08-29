@@ -4,6 +4,7 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 
 ## [Unreleased]
 ### Changed
+- **Passive Member Profile Writes**: Reduced high-frequency group-message persistence by skipping passive member-profile saves when an existing member's observed card and nickname are unchanged, while still persisting first-seen members and real profile changes.
 - **Command Boundary**: Added a native `CommandContext` command adapter so glog command services receive dehydrated message, group, sender, and platform data instead of directly reading AstrBot events throughout the command layer.
 - **Bot API Boundary**: Added typed Bot API result models and compatible result-returning methods for group metadata, member lists, group-name updates, and group portrait updates, reducing raw response and error-shape leakage from the platform adapter.
 - **Hot-Reload Lifecycle**: Registered the initialization task with the plugin background-task tracker and added `terminate()` cleanup to stop runtime loops, cancel pending tasks, await shutdown, and log non-cancellation task failures.
@@ -15,6 +16,7 @@ All notable changes to the `astrbot_plugin_group_event_log` codebase will be doc
 - **Avatar Rollback Diagnostics**: Expanded `set_group_portrait` rollback input candidates, classified rollback failures into path-missing / unreadable-path / API-rejected / verify-failed cases, and surfaced applied-input plus attempted-input diagnostics in command output, persisted state, and dispatched logs.
 
 ### Refactored
+- **Plugin Entry Wiring**: Moved runtime dependency graph construction and WebUI default event-switch parsing from `main.py` into `runtime/plugin_runtime_factory.py`, leaving the plugin entry focused on registration, lifecycle tasks, and AstrBot event routing.
 - **Runtime Summaries**: Moved avatar and member status/check summary line construction out of `GroupRuntimeService` into `group_runtime_summary.py`, keeping the runtime service focused on orchestration and response wrapping.
 - **Glog Event Switch Layer**: Extracted bot self-operation event switch command handling into `glog_event_service.py`, keeping `glog_config_service.py` focused on general plugin and group configuration commands.
 - **State Persistence**: Migrated high-frequency runtime state (avatar hash, group name guard, member profiles) from scattered JSON writes to SQLite.

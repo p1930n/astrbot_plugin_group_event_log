@@ -47,6 +47,7 @@ class MemberProfileService:
         push_group_ids: list[str],
     ) -> None:
         state = await self._persistence.load_member_profile_state(group_id)
+        had_member_profile = _has_member_profile_entry(state, user_id)
         state, change = apply_passive_member_profile(
             state,
             group_id,
@@ -55,7 +56,8 @@ class MemberProfileService:
             nickname,
             "passive_message",
         )
-        await self._persistence.save_member_profile_state(group_id, state)
+        if change or not had_member_profile:
+            await self._persistence.save_member_profile_state(group_id, state)
 
         if change and push_group_ids:
             await self._log_dispatcher.dispatch_member_profile_logs(
@@ -95,3 +97,10 @@ class MemberProfileService:
                 changes,
             )
         return state, changes, sent_push_groups
+
+
+def _has_member_profile_entry(state: dict[str, object], user_id: str) -> bool:
+    members = state.get("members")
+    if not isinstance(members, dict):
+        return False
+    return isinstance(members.get(user_id), dict)

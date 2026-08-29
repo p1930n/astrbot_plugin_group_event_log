@@ -300,6 +300,49 @@ class GlogConfigServiceTests(unittest.IsolatedAsyncioTestCase):
             f"interval must be at least {MIN_POLL_INTERVAL_SECONDS} seconds",
         )
 
+    async def test_non_global_current_group_admin_can_enable_push_group(self) -> None:
+        harness = CommandTestHarness()
+        service = harness.build_config_service(is_global_admin=False)
+
+        result = await service.handle_push(
+            command_context(FakeEvent("/glog push enable 10001", group_id="10001")),
+            ["enable", "10001"],
+        )
+
+        self.assertEqual(result.message_text, "push group 10001 set to enabled")
+        self.assertTrue(harness.config.push_groups["10001"].enabled)
+        self.assertEqual(harness.runtime_config_store.save_calls, 1)
+
+    async def test_non_global_admin_cannot_enable_other_push_group(self) -> None:
+        harness = CommandTestHarness()
+        service = harness.build_config_service(is_global_admin=False)
+
+        result = await service.handle_push(
+            command_context(FakeEvent("/glog push enable 20002", group_id="10001")),
+            ["enable", "20002"],
+        )
+
+        self.assertEqual(result.message_text, "no permission to manage this push group")
+        self.assertNotIn("20002", harness.config.push_groups)
+        self.assertEqual(harness.runtime_config_store.save_calls, 0)
+
+    async def test_non_global_admin_cannot_change_global_intervals(self) -> None:
+        harness = CommandTestHarness()
+        service = harness.build_config_service(is_global_admin=False)
+
+        avatar_result = await service.handle_avatar_interval(
+            command_context(FakeEvent("/glog avatar interval 60", group_id="10001")),
+            ["60"],
+        )
+        member_result = await service.handle_member_interval(
+            command_context(FakeEvent("/glog member interval 60", group_id="10001")),
+            ["60"],
+        )
+
+        self.assertEqual(avatar_result.message_text, "global admin permission required")
+        self.assertEqual(member_result.message_text, "global admin permission required")
+        self.assertEqual(harness.runtime_config_store.save_calls, 0)
+
 
 class GlogGroupServiceTests(unittest.IsolatedAsyncioTestCase):
     async def test_avatar_check_routes_to_group_runtime_service(self) -> None:
